@@ -236,9 +236,6 @@ Remember to point the app back at the deployed Worker before packaging — a
 
 ## Not done yet
 
-- **App icon.** Even Hub wants a 24×24 monochrome icon, which this repo does not
-  have. It is not an `app.json` field — it is uploaded in the dev portal.
-  [g2-icon-studio](https://github.com/naotake/g2-icon-studio) makes them.
 - **Locked-phone behaviour.** Reviewers test it, and this app has not been. It
   stops its refresh timer on `FOREGROUND_EXIT_EVENT`, which is the relevant
   hook, but that path has only been exercised synthetically.
@@ -376,6 +373,9 @@ and fell off the bottom of the canvas.
 | `fetcher/build-feed.mjs` | Writes feed.json, carries a failed source's last items |
 | `worker/src/index.ts` | Serves the app and the published feed; no parsing |
 | `.github/workflows/feed.yml` | The hourly cron |
+| `scripts/make-icon.mjs` | Draws the 24x24 icon; asserts Even Hub's rules |
+| `scripts/make-qr.mjs` | Renders the sideload QR as a scannable PNG |
+| `scripts/set-feed-url.mjs` | Writes the Worker URL to both places it must appear |
 
 ## Known gaps
 

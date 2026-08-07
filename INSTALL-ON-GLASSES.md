@@ -151,6 +151,30 @@ so the QR always points at wherever the app is actually served from.
 
 ---
 
+## App icon
+
+Even Hub wants a 24x24 monochrome icon, uploaded in the dev portal — it is not
+an `app.json` field and does not travel in the `.ehpk`.
+
+<img src="docs/app-icon-24-preview.png" alt="CyberNews app icon" width="120">
+
+`docs/app-icon-24.png` is the file to upload. A shield holding three lines of
+text; the last line is short, which is what reads as a paragraph rather than as
+an "=" sign.
+
+It is drawn in code, not exported from an editor, so the constraints are
+checked rather than hoped for:
+
+```bash
+npm run icon
+```
+
+The generator asserts all four rules and exits non-zero if a tweak breaks one —
+ink coverage 25.2% (the limit is 12-55%), no isolated pixels, nothing inside the
+2px margin, and greyscale only.
+
+---
+
 ## Limits of sideloading
 
 A sideloaded app **dies the moment the phone locks** — the WebView is suspended.
