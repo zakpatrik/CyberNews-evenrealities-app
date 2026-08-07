@@ -66,7 +66,7 @@ function feedUpdatedAt(): number {
 }
 
 /** The published payloads, read off-counter so the harness can assert against them. */
-let liveItems: Array<{ id: string; src: string; summary: string }> = []
+let liveItems: Array<{ id: string; src: string; title: string; summary: string }> = []
 let liveArticles: Record<string, { text: string; chars: number; source: string }> = {}
 
 async function loadPublished(): Promise<void> {
@@ -123,15 +123,73 @@ async function main(): Promise<void> {
     'every rendered row is within 63 bytes',
     `max ${Math.max(...rows.map(byteLen))}B`,
   )
+  // With more stories than fit, the last row is navigation rather than a story.
+  const listPaged = liveItems.length > MAX_LIST_ITEMS
+  const storyRows = listPaged ? rows.slice(0, -1) : rows
   check(
-    rows.every(r => /^(THN|BC|CSN|TR) /.test(r)),
-    'every row carries a source tag',
+    storyRows.every(r => /^(THN|BC|CSN|TR) /.test(r)),
+    'every story row carries a source tag',
+    storyRows.find(r => !/^(THN|BC|CSN|TR) /.test(r)),
   )
+  if (listPaged) {
+    check(rows.length === MAX_LIST_ITEMS, 'a paged list fills all 20 rows', `${rows.length}`)
+    check(/^>> Older/.test(rows[rows.length - 1]), 'the last row is the pager', rows[rows.length - 1])
+    check(
+      storyRows.every(r => !/^(>>|<<)/.test(r)),
+      'no navigation label leaks into the story rows',
+    )
+  }
+
+  // Captured before any paging, which legitimately fetches more bodies.
+  const articleRequestsAtBoot = network.articleRequests
 
   const header = asPage(lastCall('rebuild')?.arg).textObject?.[0]?.content ?? ''
   check(header.startsWith('CyberNews'), 'header rendered', header)
   console.log(`        header: "${header}"`)
   console.log(`        row[0]: "${rows[0]}"`)
+
+  if (listPaged) {
+    console.log('--- list paging ---')
+    const page1 = storyRows.slice()
+    const totalPages = Math.ceil(liveItems.length / (MAX_LIST_ITEMS - 1))
+
+    // Tapping the pager row is what reaches stories 21 and beyond; the firmware
+    // will not render a list longer than 20 whatever we send it.
+    fire({ listEvent: { containerID: ID_LIST, currentSelectItemIndex: MAX_LIST_ITEMS - 1 } })
+    await settle()
+
+    const page2 = currentRows()
+    check(page2.length > 0, 'the pager row moved to another page')
+    check(
+      page2.slice(0, -1).every(r => !page1.includes(r)),
+      'page two shows stories page one did not',
+    )
+    const hdr2 = asPage(lastCall('rebuild')?.arg).textObject?.[0]?.content ?? ''
+    check(hdr2.includes(`2/${totalPages}`), 'the header tracks the page', hdr2)
+    console.log(`        ${totalPages} pages · "${hdr2}"`)
+
+    // Opening a story here must map to the feed index, not the row index.
+    const before = calls.filter(c => c.name === 'rebuild').length
+    fire({ listEvent: { containerID: ID_LIST, currentSelectItemIndex: 0 } })
+    await settle()
+    check(calls.filter(c => c.name === 'rebuild').length > before, 'a story on page two opens')
+    const expected = liveItems[MAX_LIST_ITEMS - 1]
+    check(
+      (currentDetail() ?? '').includes(expected.title.slice(0, 30)),
+      'page two row one is feed item 20, not item 0',
+      `${expected.title.slice(0, 40)}`,
+    )
+
+    // Walk to the end and confirm it wraps rather than dead-ending.
+    fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
+    await settle()
+    for (let p = 2; p <= totalPages; p++) {
+      fire({ listEvent: { containerID: ID_LIST, currentSelectItemIndex: MAX_LIST_ITEMS - 1 } })
+      await settle()
+    }
+    const wrapped = asPage(lastCall('rebuild')?.arg).textObject?.[0]?.content ?? ''
+    check(wrapped.includes(`1/${totalPages}`), 'the last page wraps back to the newest', wrapped)
+  }
 
   console.log('--- open a story ---')
   const rebuildsBefore = calls.filter(c => c.name === 'rebuild').length
@@ -152,7 +210,11 @@ async function main(): Promise<void> {
   check(readStorage('cybernews.lastSeenTs') !== undefined, 'last-seen timestamp persisted')
 
   console.log('--- full article text ---')
-  check(network.articleRequests === 1, 'the article bundle was fetched once, with the feed', `${network.articleRequests}`)
+  check(
+    articleRequestsAtBoot === 1,
+    'the newest page of bodies was fetched once, with the feed',
+    `${articleRequestsAtBoot}`,
+  )
 
   // Which story is open, and does the published bundle carry its body?
   const opened = liveItems[2]

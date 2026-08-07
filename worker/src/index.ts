@@ -30,6 +30,8 @@ const DEFAULT_FEED_SOURCE =
 /** The fetcher publishes hourly, so caching below that just re-reads unchanged JSON. */
 const EDGE_TTL = 900 // seconds
 const DEFAULT_LIMIT = 100
+/** Bound on an ?ids= slice, so the parameter cannot be used to fan out work. */
+const MAX_IDS = 40
 /** Three missed hourly runs — by then the workflow has stopped, not hiccuped. */
 const STALE_AFTER = 3 * 3600
 
@@ -77,14 +79,34 @@ export default {
           cf: { cacheTtl: EDGE_TTL, cacheEverything: true },
         })
         if (!res.ok) throw new Error(`HTTP ${res.status} from the article source`)
-        return new Response(res.body, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            ...corsHeaders(),
-            'Cache-Control': `public, max-age=${EDGE_TTL}, stale-while-revalidate=600`,
-          },
-        })
+
+        const raw = url.searchParams.get('ids')
+        if (!raw) {
+          // Whole bundle: stream it through untouched.
+          return new Response(res.body, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              ...corsHeaders(),
+              'Cache-Control': `public, max-age=${EDGE_TTL}, stale-while-revalidate=600`,
+            },
+          })
+        }
+
+        // A slice, so paging deep into the feed costs ~20 bodies rather than
+        // the whole archive. The upstream file is edge-cached either way.
+        const wanted = new Set(raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_IDS))
+        const data = (await res.json()) as { updated?: number; items?: Record<string, unknown> }
+        const items: Record<string, unknown> = {}
+        for (const id of wanted) {
+          if (data.items && id in data.items) items[id] = data.items[id]
+        }
+
+        return json(
+          { updated: data.updated ?? 0, count: Object.keys(items).length, items },
+          200,
+          { 'Cache-Control': `public, max-age=${EDGE_TTL}, stale-while-revalidate=600` },
+        )
       } catch (err) {
         return json({ error: `articles unavailable: ${(err as Error).message}` }, 502)
       }

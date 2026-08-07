@@ -66,12 +66,19 @@ export async function fetchFeed(): Promise<FeedResult> {
  * signal and with no wait when a story is opened. Failure is not fatal — the app
  * falls back to the RSS summaries it already has.
  */
-export async function fetchArticles(): Promise<ArticleMap> {
+export async function fetchArticles(ids?: string[]): Promise<ArticleMap> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
+  // Asking for specific ids keeps a deep page to ~20 bodies instead of the
+  // whole archive; the Worker slices its edge-cached copy.
+  const url =
+    ids && ids.length > 0
+      ? `${ARTICLES_URL}${ARTICLES_URL.includes('?') ? '&' : '?'}ids=${encodeURIComponent(ids.join(','))}`
+      : ARTICLES_URL
+
   try {
-    const res = await fetch(ARTICLES_URL, { signal: controller.signal, cache: 'no-store' })
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const data = (await res.json()) as { items?: unknown }

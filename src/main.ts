@@ -13,6 +13,9 @@ import { isFreshEnough, nextRefreshDelay } from './schedule'
 import {
   ID_DETAIL,
   MAX_LIST_ITEMS,
+  LIST_STORIES_PER_PAGE,
+  LIST_NAV_MORE,
+  LIST_NAV_WRAP,
   DETAIL_CHROME_BYTES,
   MAX_REFRESH_MS,
   REFRESH_JITTER_MS,
@@ -37,6 +40,8 @@ const state = {
   lastSeenTs: 0,
   /** When we last successfully fetched — distinct from `updated`, the publish time. */
   lastFetchAt: 0,
+  /** Which slice of the feed the list is showing. */
+  listPage: 0,
   detailIndex: 0,
   detailPages: [] as string[],
   detailPage: 0,
@@ -66,22 +71,49 @@ function headerText(): string {
   const right = unread > 0 ? `${unread} new` : timeAgo(state.updated)
   const degraded = state.errors.length > 0 ? ` · ${state.errors.length} src down` : ''
 
-  // The firmware list caps at MAX_LIST_ITEMS rows, so say so rather than
-  // quietly presenting a truncated list as the whole feed.
-  const shown = Math.min(state.items.length, MAX_LIST_ITEMS)
-  const count = shown < state.items.length ? `${shown} of ${state.items.length}` : `${shown}`
-  return `CyberNews · ${count}${degraded} · ${right}`
+  const pages = pageCount()
+  const where = pages > 1 ? `${state.listPage + 1}/${pages} of ${state.items.length}` : `${state.items.length}`
+  return `CyberNews · ${where}${degraded} · ${right}`
+}
+
+/** Total pages, given that a paged list spends one row on navigation. */
+function pageCount(): number {
+  if (state.items.length <= MAX_LIST_ITEMS) return 1
+  return Math.ceil(state.items.length / LIST_STORIES_PER_PAGE)
+}
+
+/** Index into state.items of the first story on the current page. */
+function pageOffset(): number {
+  return pageCount() === 1 ? 0 : state.listPage * LIST_STORIES_PER_PAGE
+}
+
+/** Stories on the current page, and whether a navigation row follows them. */
+function pageRows(): { stories: NewsItem[]; nav: string | null } {
+  if (pageCount() === 1) return { stories: state.items.slice(0, MAX_LIST_ITEMS), nav: null }
+
+  const start = pageOffset()
+  const stories = state.items.slice(start, start + LIST_STORIES_PER_PAGE)
+  const last = state.listPage >= pageCount() - 1
+  return { stories, nav: last ? LIST_NAV_WRAP : LIST_NAV_MORE }
 }
 
 async function renderList(): Promise<void> {
   state.view = 'list'
-  const rows = state.items
-    .slice(0, MAX_LIST_ITEMS)
-    .map(it => listRowLabel(it.src, it.title))
+  const { stories, nav } = pageRows()
+  const rows = stories.map(it => listRowLabel(it.src, it.title))
+  if (nav) rows.push(nav)
 
   // The list widget needs at least one row to render a sane box.
   await render(listPage(headerText(), rows.length > 0 ? rows : ['No stories yet']))
   setCompanionStatus()
+}
+
+/** Move to the next page, wrapping at the end so forward taps always work. */
+async function turnListPage(): Promise<void> {
+  state.listPage = (state.listPage + 1) % pageCount()
+  await renderList()
+  // Bodies are prefetched only for the newest page; fetch this one's on arrival.
+  void ensureArticlesForPage()
 }
 
 /**
@@ -167,23 +199,28 @@ async function refresh({ force = false } = {}): Promise<void> {
 
   let ok = false
   try {
-    // Both in one go: the article bundle is what makes reading work without a
-    // signal, so a refresh that skipped it would leave stories unreadable later.
-    const [result, articles] = await Promise.all([
-      fetchFeed(),
-      fetchArticles().catch(err => {
-        // Losing the bodies is a degradation, not a failure — summaries still show.
-        console.warn('Article bodies unavailable:', err)
-        return {} as ArticleMap
-      }),
-    ])
+    const result = await fetchFeed()
     state.items = result.items
     state.updated = result.updated
     state.errors = result.errors
     state.lastFetchAt = Date.now()
-    if (Object.keys(articles).length > 0) state.articles = articles
+    // A refresh replaces the feed, so start at the newest page again.
+    state.listPage = 0
     ok = true
     if (result.errors.length > 0) console.warn('Feed sources degraded:', result.errors)
+
+    // Only the newest page is prefetched. The whole archive is ~460 kB and most
+    // of it is never opened; a page is ~120 kB and makes the common case work
+    // with no signal. Deeper pages fetch their own bodies on arrival.
+    const wanted = pageRows()
+      .stories.filter(it => it.hasFull)
+      .map(it => it.id)
+    try {
+      state.articles = await fetchArticles(wanted)
+    } catch (err) {
+      // Losing the bodies is a degradation, not a failure — summaries still show.
+      console.warn('Article bodies unavailable:', err)
+    }
   } catch (err) {
     // Keep whatever is already on screen; a failed refresh must not blank the display.
     state.errors = [(err as Error).message]
@@ -197,6 +234,29 @@ async function refresh({ force = false } = {}): Promise<void> {
 
   if (state.view === 'list') await renderList()
   else setCompanionStatus()
+}
+
+/**
+ * Make sure the current page's stories have bodies.
+ *
+ * The refresh prefetches the newest page so the common case is instant and
+ * works offline. Paging deeper is a deliberate act, so fetching those bodies
+ * then is reasonable — and once fetched they stay, so coming back is free.
+ */
+async function ensureArticlesForPage(): Promise<void> {
+  const missing = pageRows()
+    .stories.filter(it => it.hasFull && !state.articles[it.id])
+    .map(it => it.id)
+  if (missing.length === 0) return
+
+  try {
+    const fetched = await fetchArticles(missing)
+    state.articles = { ...state.articles, ...fetched }
+    if (state.view === 'list') setCompanionStatus()
+  } catch (err) {
+    // Summaries still render; the detail view marks them.
+    console.warn('Could not load bodies for this page:', err)
+  }
 }
 
 async function markSeen(ts: number): Promise<void> {
@@ -314,7 +374,11 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
   if (state.view === 'list') {
     // Scroll events only move the widget's own selection; act on the click.
     if (listType === OsEventTypeList.CLICK_EVENT) {
-      void openDetail(event.listEvent?.currentSelectItemIndex ?? 0)
+      const row = event.listEvent?.currentSelectItemIndex ?? 0
+      const { stories, nav } = pageRows()
+      // The navigation row sits after the stories, so anything past them is it.
+      if (nav && row >= stories.length) void turnListPage()
+      else void openDetail(pageOffset() + row)
     }
     return
   }

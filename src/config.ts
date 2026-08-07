@@ -49,6 +49,20 @@ export const FEED_LIMIT = 100
 export const MAX_LIST_ITEMS = 20
 
 /**
+ * Paging through the feed.
+ *
+ * The 20-row cap is the firmware's, not ours, so reaching story 21 means
+ * repainting the list rather than growing it. When the feed does not fit one
+ * page, the last row becomes navigation and the other 19 carry stories.
+ *
+ * Plain ASCII on purpose: the firmware substitutes a placeholder for glyphs
+ * outside its font, and arrows are exactly the kind of character it lacks.
+ */
+export const LIST_STORIES_PER_PAGE = MAX_LIST_ITEMS - 1
+export const LIST_NAV_MORE = '>> Older'
+export const LIST_NAV_WRAP = '<< Back to newest'
+
+/**
  * Rendered width, not the firmware cap.
  *
  * The firmware accepts 63 bytes per list item, but a 63-byte headline is wider
