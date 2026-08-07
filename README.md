@@ -4,7 +4,7 @@ Cybersecurity headline reader for the Even Realities G2. Merges four feeds into
 one chronological list on the glasses: **The Hacker News**, **BleepingComputer**,
 **Cybersecurity News** and **Dark Reading**.
 
-Scroll the list on the temple touchpad, tap to read the summary, double-tap to go
+Scroll the list on the temple touchpad, tap to read the full article, double-tap to go
 back — and again to bring up the exit confirmation.
 
 ## Controls
@@ -46,7 +46,8 @@ resolves to "No", never to exit.
 ```
 GitHub Actions, hourly                ← ordinary runner IPs, all four feeds answer
   fetcher/build-feed.mjs
-  fetch 4 RSS feeds → parse → merge → dedupe → feed.json → commit
+  fetch 4 RSS feeds → parse → merge → dedupe → feed.json
+  extract article bodies for the top 20 → articles.json → commit
         │
         ▼
 raw.githubusercontent.com/<you>/<repo>/main/feed.json
@@ -55,6 +56,7 @@ raw.githubusercontent.com/<you>/<repo>/main/feed.json
 Cloudflare Worker                      ← serves the app and caches the feed
   /            static app bundle (dist/ via [assets])
   /feed        the published JSON, filtered and edge-cached 15 min
+  /articles    full article bodies (~104 kB), edge-cached 15 min
   /health      liveness
   /diag        feed age + per-source status
         │
@@ -266,6 +268,36 @@ checked on real hardware** — the simulator re-implements the drawing logic
 rather than sharing firmware code, and its own README warns that font rendering
 and list scroll positioning can differ.
 
+## Full article text
+
+RSS summaries run 156–497 characters — a headline and a sentence. The fetcher
+pulls the article body for the 20 stories the list can reach, and the app
+downloads that bundle with each refresh, so opening a story costs no request and
+works with no signal.
+
+| Source | Body from | Typical |
+|---|---|---|
+| Cybersecurity News | the feed's `content:encoded` | 3.5–15k chars |
+| The Hacker News | article page + Readability | 3.4–5.9k |
+| BleepingComputer | article page + Readability | 3.1–3.7k |
+| Dark Reading | **not available** — summary only | 156 |
+
+Dark Reading's article pages sit behind a Cloudflare JS challenge that answered
+403 to every header combination tried, including a full browser fingerprint and
+a Googlebot UA. Getting past it would mean driving a headless browser
+specifically to defeat a control the site put up deliberately, so DR keeps its
+summary and the detail view labels it `· summary` rather than passing a teaser
+off as the article.
+
+18 of 20 come back with a body, averaging 5.8k characters — a **104 kB** bundle,
+and up to **47 pages** on a 576×288 canvas. Scrolling pages as well as tapping,
+which is the gentler way through a long one.
+
+Article text never changes once published, so anything already extracted is
+reused verbatim: a run fetches only genuinely new stories rather than all twenty
+pages every hour. It also means a source that blocks us today still shows the
+text captured yesterday.
+
 ## Refresh pacing
 
 The feed changes once an hour, when the workflow publishes. Requests in between
@@ -331,6 +363,7 @@ and fell off the bottom of the canvas.
 | `src/config.ts` | Firmware limits, geometry, container IDs, tunables |
 | `src/schedule.ts` | Refresh pacing; pure, so the battery logic is testable |
 | `fetcher/parse.mjs` | RSS fetch, parse, normalise, dedupe — runs in CI |
+| `fetcher/extract.mjs` | Article bodies via Readability, with reuse across runs |
 | `fetcher/build-feed.mjs` | Writes feed.json, carries a failed source's last items |
 | `worker/src/index.ts` | Serves the app and the published feed; no parsing |
 | `.github/workflows/feed.yml` | The hourly cron |

@@ -69,6 +69,18 @@ CyberNews · 20 of 60 · 12 new
 `20 of 60` is not a bug: the firmware caps a list at 20 rows, and the header is
 deliberately honest that the feed holds more.
 
+Opening a story gives you the **whole article**, not the RSS teaser — typically
+15–20 pages, up to 47. The pager sits on the source line (`Cybersecurity News ·
+24m · 4/18`). Scrolling turns pages as well as tapping, which is easier on a
+long one.
+
+Dark Reading stories show `· summary` on that line instead. Their article pages
+are behind a Cloudflare challenge, so only the RSS teaser is available and the
+app says so rather than pretending.
+
+The bodies download once per refresh, so opening a story is instant and works
+with no signal.
+
 ---
 
 ## Please check these three things
