@@ -175,6 +175,30 @@ ink coverage 25.2% (the limit is 12-55%), no isolated pixels, nothing inside the
 
 ---
 
+## Submission assets
+
+| Asset | File | Notes |
+|---|---|---|
+| Icon | `docs/app-icon-24.png` | 24x24, uploaded in the portal |
+| Screenshots | `docs/screenshots/*.png` | 576x288, straight from the device render |
+
+Screenshots have to match what the app actually renders, so these are simulator
+captures rather than mock-ups.
+
+**They needed converting.** The simulator's framebuffer is pure green
+(R=0, G=255, B=0) with the artwork carried entirely in the **alpha channel** —
+so a naive greyscale conversion averages the RGB and yields a flat grey
+rectangle, and uploading the file untouched submits a colour image, which the
+guidelines reject. Take alpha as the luminance instead:
+
+```python
+im = Image.open(shot).convert('RGBA')
+a = im.split()[3]
+Image.merge('RGB', (a, a, a)).save(out)
+```
+
+---
+
 ## Limits of sideloading
 
 A sideloaded app **dies the moment the phone locks** — the WebView is suspended.
