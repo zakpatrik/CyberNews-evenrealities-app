@@ -49,7 +49,7 @@ interface FeedFile {
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
     if (request.method === 'OPTIONS') {
@@ -69,11 +69,12 @@ export default {
       return json({ error: 'not found' }, 404)
     }
 
-    const cache = caches.default
-    const cacheKey = new Request(url.toString(), { method: 'GET' })
-    const hit = await cache.match(cacheKey)
-    if (hit) return hit
-
+    // Deliberately no caches.default layer here. It is keyed by URL and outlives
+    // deploys, so after the fetching moved out of this Worker it kept serving a
+    // response recorded when two sources were failing — correct-looking, wrong,
+    // and invisible unless you added a cache-buster. The upstream JSON is
+    // already edge-cached by the `cf` options in loadFeed, which is the part
+    // worth caching; filtering it per request is trivial.
     let feed: FeedFile
     try {
       feed = await loadFeed(env)
@@ -95,13 +96,11 @@ export default {
       errors.push(`feed is ${Math.round(age / 3600)}h old — check the fetcher workflow`)
     }
 
-    const response = json(
+    return json(
       { updated: feed.updated, count: items.length, items, errors },
       200,
       { 'Cache-Control': `public, max-age=${EDGE_TTL}, stale-while-revalidate=600` },
     )
-    ctx.waitUntil(cache.put(cacheKey, response.clone()))
-    return response
   },
 }
 
