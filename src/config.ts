@@ -19,6 +19,9 @@
 export const FEED_URL: string =
   import.meta.env?.VITE_FEED_URL ?? 'https://cybernews-feed.YOUR-SUBDOMAIN.workers.dev/feed'
 
+/** Full article bodies, on the same origin. Derived so there is one URL to set. */
+export const ARTICLES_URL: string = FEED_URL.replace(/\/feed(\?|$)/, '/articles$1')
+
 /** Display geometry, in device pixels. */
 export const SCREEN_W = 576
 export const SCREEN_H = 288

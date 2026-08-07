@@ -6,7 +6,7 @@ import {
   OsEventTypeList,
 } from '@evenrealities/even_hub_sdk'
 
-import { fetchFeed, countUnread, type NewsItem } from './feed'
+import { fetchFeed, fetchArticles, countUnread, type NewsItem, type ArticleMap } from './feed'
 import { listPage, detailPage, confirmPage, type PageContainers } from './views'
 import { listRowLabel, paginateBytes, detailPageContent, byteLen, timeAgo } from './format'
 import { isFreshEnough, nextRefreshDelay } from './schedule'
@@ -40,6 +40,10 @@ const state = {
   detailIndex: 0,
   detailPages: [] as string[],
   detailPage: 0,
+  /** False when the open story fell back to its RSS summary. */
+  detailFull: false,
+  /** Full article bodies, keyed by item id. Downloaded with each refresh. */
+  articles: {} as ArticleMap,
   loading: false,
 }
 
@@ -97,7 +101,9 @@ function detailContent(): string {
 
   return detailPageContent({
     title: item.title,
-    srcLabel: item.srcLabel,
+    // Say when you are reading the teaser rather than the story, so a short
+    // read is not mistaken for a short article.
+    srcLabel: state.detailFull ? item.srcLabel : `${item.srcLabel} · summary`,
     age: timeAgo(item.ts),
     pages: state.detailPages,
     index: state.detailPage,
@@ -109,7 +115,13 @@ async function openDetail(index: number): Promise<void> {
   if (!item) return
 
   state.detailIndex = index
-  state.detailPages = paginateBytes(item.summary || '(no summary in feed)', DETAIL_CHROME_BYTES)
+
+  // Prefer the downloaded article; fall back to the RSS summary when extraction
+  // failed for this source, which is what happens for Dark Reading.
+  const article = state.articles[item.id]
+  const body = article && article.chars > 0 ? article.text : item.summary
+  state.detailFull = Boolean(article && article.chars > 0)
+  state.detailPages = paginateBytes(body || '(no text available)', DETAIL_CHROME_BYTES)
   state.detailPage = 0
   state.view = 'detail'
 
@@ -155,11 +167,21 @@ async function refresh({ force = false } = {}): Promise<void> {
 
   let ok = false
   try {
-    const result = await fetchFeed()
+    // Both in one go: the article bundle is what makes reading work without a
+    // signal, so a refresh that skipped it would leave stories unreadable later.
+    const [result, articles] = await Promise.all([
+      fetchFeed(),
+      fetchArticles().catch(err => {
+        // Losing the bodies is a degradation, not a failure — summaries still show.
+        console.warn('Article bodies unavailable:', err)
+        return {} as ArticleMap
+      }),
+    ])
     state.items = result.items
     state.updated = result.updated
     state.errors = result.errors
     state.lastFetchAt = Date.now()
+    if (Object.keys(articles).length > 0) state.articles = articles
     ok = true
     if (result.errors.length > 0) console.warn('Feed sources degraded:', result.errors)
   } catch (err) {

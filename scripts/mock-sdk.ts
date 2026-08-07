@@ -35,12 +35,13 @@ if (!g.document) {
  * Count feed requests, so the e2e can assert the app is not re-fetching a file
  * that cannot have changed — the whole point of the refresh pacing.
  */
-export const network = { feedRequests: 0 }
+export const network = { feedRequests: 0, articleRequests: 0 }
 
 const realFetch = g.fetch as typeof fetch
 g.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-  if (target.includes('/feed')) network.feedRequests++
+  if (target.includes('/articles')) network.articleRequests++
+  else if (target.includes('/feed')) network.feedRequests++
   return realFetch(input as RequestInfo, init)
 }) as typeof fetch
 

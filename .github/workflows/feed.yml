@@ -26,7 +26,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Extraction adds ~20 article page fetches and a jsdom parse for each.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -38,19 +39,19 @@ jobs:
         working-directory: fetcher
         run: npm ci || npm install
 
-      - name: Build feed.json
-        run: node fetcher/build-feed.mjs --out feed.json --limit 60
+      - name: Build feed.json and articles.json
+        run: node fetcher/build-feed.mjs --out feed.json --articles articles.json --limit 60
 
       - name: Commit when the feed changed
         run: |
-          if git diff --quiet -- feed.json; then
+          if git diff --quiet -- feed.json articles.json; then
             echo "No change."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add feed.json
-          git commit -m "feed: $(node -e "console.log(require('./feed.json').count)") items"
+          git add feed.json articles.json
+          git commit -m "feed: $(node -e "console.log(require('./feed.json').count)") items, $(node -e "console.log(require('./articles.json').count)") with full text"
           # The schedule is tighter than a slow push, so rebase past any commit
           # that landed while this run was working.
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}"

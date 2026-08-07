@@ -1,4 +1,4 @@
-import { FEED_URL, FEED_LIMIT, FETCH_TIMEOUT_MS } from './config'
+import { FEED_URL, ARTICLES_URL, FEED_LIMIT, FETCH_TIMEOUT_MS } from './config'
 
 export interface NewsItem {
   id: string
@@ -8,7 +8,19 @@ export interface NewsItem {
   ts: number
   url: string
   summary: string
+  /** Whether articles.json carries the body for this one. */
+  hasFull?: boolean
 }
+
+export interface Article {
+  text: string
+  chars: number
+  truncated: boolean
+  /** 'feed' and 'page' carry the body; 'summary' means extraction failed. */
+  source: 'feed' | 'page' | 'summary'
+}
+
+export type ArticleMap = Record<string, Article>
 
 export interface FeedResult {
   updated: number
@@ -45,6 +57,40 @@ export async function fetchFeed(): Promise<FeedResult> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * Fetch the full article bodies for the stories the list can reach.
+ *
+ * Pulled once per refresh rather than per story opened, so reading works with no
+ * signal and with no wait when a story is opened. Failure is not fatal — the app
+ * falls back to the RSS summaries it already has.
+ */
+export async function fetchArticles(): Promise<ArticleMap> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(ARTICLES_URL, { signal: controller.signal, cache: 'no-store' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+    const data = (await res.json()) as { items?: unknown }
+    if (typeof data.items !== 'object' || data.items === null) return {}
+
+    const out: ArticleMap = {}
+    for (const [id, value] of Object.entries(data.items as Record<string, unknown>)) {
+      if (isArticle(value)) out[id] = value
+    }
+    return out
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function isArticle(v: unknown): v is Article {
+  if (typeof v !== 'object' || v === null) return false
+  const o = v as Record<string, unknown>
+  return typeof o.text === 'string' && typeof o.source === 'string'
 }
 
 /** The payload crosses a network boundary, so shape is checked rather than assumed. */

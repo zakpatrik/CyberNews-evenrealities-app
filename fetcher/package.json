@@ -8,6 +8,8 @@
     "build-feed": "node build-feed.mjs --out ../feed.json"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.5.0"
+    "@mozilla/readability": "^0.6.0",
+    "fast-xml-parser": "^4.5.0",
+    "jsdom": "^29.1.1"
   }
 }

@@ -10,10 +10,14 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { SOURCES, loadSource, dedupe, nowSec } from './parse.mjs'
+import { extractArticles } from './extract.mjs'
 
 const args = process.argv.slice(2)
 const out = valueOf('--out') ?? 'feed.json'
+const articlesOut = valueOf('--articles') ?? out.replace(/feed\.json$/, 'articles.json')
 const limit = Number(valueOf('--limit') ?? 60)
+/** Matches MAX_LIST_ITEMS in the app — the firmware shows no more than this. */
+const articleCount = Number(valueOf('--articles-limit') ?? 20)
 
 function valueOf(flag) {
   const i = args.indexOf(flag)
@@ -45,16 +49,36 @@ for (const r of results) {
 
 const merged = dedupe(items).sort((a, b) => b.ts - a.ts).slice(0, limit)
 
+// Full text is pulled only for the rows the glasses can actually reach — the
+// firmware caps a list at 20 — so the app downloads one bundle it can read
+// offline rather than paying for 40 stories nobody can select.
+const readable = merged.slice(0, articleCount)
+
 if (merged.length === 0) {
   console.error('Every source failed and there was nothing to carry over.')
   for (const s of sources) console.error(`  ${s.id}: ${s.error}`)
   process.exit(1)
 }
 
+console.log(`Extracting full text for the ${readable.length} reachable stories…`)
+const extracted = await extractArticles(readable, msg => console.log(msg))
+
+const articles = {
+  updated: nowSec(),
+  count: Object.values(extracted).filter(a => a.chars > 0).length,
+  items: extracted,
+}
+writeFileSync(articlesOut, `${JSON.stringify(articles, null, 0)}\n`)
+
 const payload = {
   updated: nowSec(),
   count: merged.length,
-  items: merged,
+  // `full` is working state from the parser, not something the list needs; it
+  // would multiply feed.json's size for data the app reads from articles.json.
+  items: merged.map(({ full, ...item }) => ({
+    ...item,
+    hasFull: extracted[item.id]?.chars > 0,
+  })),
   errors,
   sources,
 }
@@ -67,6 +91,9 @@ for (const s of sources) {
   const state = s.ok ? 'ok' : s.stale ? 'FAILED, carried over' : 'FAILED, no data'
   console.log(`  ${s.id.padEnd(4)} ${String(s.items).padStart(3)} items  ${state}${s.error ? ` — ${s.error}` : ''}`)
 }
+
+const bytes = Math.round(JSON.stringify(articles).length / 1024)
+console.log(`Wrote ${articlesOut}: ${articles.count}/${readable.length} with full text, ${bytes} kB`)
 
 // Surface a partial outage in the Actions UI without failing the run.
 if (live < SOURCES.length && process.env.GITHUB_STEP_SUMMARY) {

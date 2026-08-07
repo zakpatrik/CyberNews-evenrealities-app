@@ -83,6 +83,12 @@ export function extractItems(xml, src) {
       ? pickText(node?.summary) || pickText(node?.content)
       : pickText(node?.description) || pickText(node?.['content:encoded'])
 
+    // Cybersecurity News ships the whole article in content:encoded. Keeping it
+    // saves fetching the page again, and it is the only source whose full text
+    // costs nothing extra.
+    const encoded = toPlainText(pickText(node?.['content:encoded']) || pickText(node?.content))
+    const summary = toPlainText(summaryRaw)
+
     out.push({
       id: hash(link),
       title,
@@ -90,7 +96,10 @@ export function extractItems(xml, src) {
       srcLabel: src.label,
       ts: parseDate(dateRaw),
       url: link,
-      summary: truncate(toPlainText(summaryRaw), MAX_SUMMARY),
+      summary: truncate(summary, MAX_SUMMARY),
+      // Stripped out of feed.json by the caller and moved into articles.json —
+      // the list payload must stay small.
+      full: encoded.length > summary.length * 1.5 && encoded.length > 800 ? encoded : '',
     })
   }
   return out

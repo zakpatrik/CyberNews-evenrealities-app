@@ -25,6 +25,7 @@ import {
 } from '../src/config'
 
 const FEED = 'http://localhost:8787/feed?limit=60'
+const ARTICLES = 'http://localhost:8787/articles'
 
 /** Hard firmware caps, quoted from the simulator changelog (v0.7.1, v0.7.3). */
 const FIRMWARE_LIST_ITEM_BYTES = 63
@@ -43,6 +44,7 @@ function check(ok: boolean, label: string, detail = ''): void {
 }
 
 interface Item {
+  id: string
   title: string
   src: string
   srcLabel: string
@@ -183,6 +185,61 @@ async function main(): Promise<void> {
     }
   }
 
+  // Full articles are the real stress test: a 15k-character story becomes
+  // dozens of pages, and every one of them has to clear the firmware cap.
+  console.log('--- full article pagination ---')
+  let articles: Record<string, { text: string; chars: number; source: string }> = {}
+  try {
+    const res = await fetch(ARTICLES)
+    if (res.ok) articles = ((await res.json()) as { items: typeof articles }).items ?? {}
+  } catch {
+    console.log('  (articles endpoint unreachable, skipping)')
+  }
+
+  const byId = new Map(items.map(i => [i.id, i]))
+  let widestArticlePage = 0
+  let mostPages = 0
+  let articlePages = 0
+  let withBody = 0
+
+  for (const [id, article] of Object.entries(articles)) {
+    if (!article.chars) continue
+    withBody++
+    const item = byId.get(id)
+    const pages = paginateBytes(article.text, DETAIL_CHROME_BYTES)
+    articlePages += pages.length
+    mostPages = Math.max(mostPages, pages.length)
+
+    check(pages.length > 0, 'a full article always paginates to at least one page')
+    check(
+      pages.join(' ').replace(/\s+/g, '').length >= article.text.replace(/\s+/g, '').length - 2,
+      'pagination drops no article text',
+      `${id}`,
+    )
+
+    for (let i = 0; i < pages.length; i++) {
+      const content = detailPageContent({
+        title: item?.title ?? 'Untitled',
+        srcLabel: item?.srcLabel ?? 'Source',
+        age: '1h',
+        pages,
+        index: i,
+      })
+      widestArticlePage = Math.max(widestArticlePage, byteLen(content))
+      check(
+        byteLen(content) <= FIRMWARE_TEXT_BYTES,
+        'full-article page within 999 bytes',
+        `${id} p${i + 1}/${pages.length} = ${byteLen(content)}B`,
+      )
+    }
+  }
+
+  console.log(`  articles with a body : ${withBody}`)
+  console.log(`  widest article page  : ${widestArticlePage}B / ${FIRMWARE_TEXT_BYTES}B`)
+  console.log(`  longest article      : ${mostPages} pages`)
+  console.log(`  total article pages  : ${articlePages}`)
+
+  console.log('--- list and summary ---')
   console.log(`  widest list row : ${worstRow}B / ${FIRMWARE_LIST_ITEM_BYTES}B`)
   console.log(`  widest detail   : ${worstPage}B / ${FIRMWARE_TEXT_BYTES}B`)
   console.log(`  detail pages    : ${totalPages} across ${items.length} stories`)

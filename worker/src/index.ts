@@ -12,6 +12,7 @@
  * Worker reads that.
  *
  *   GET /feed?limit=60&src=THN,BC
+ *   GET /articles
  *   GET /health
  *   GET /diag
  */
@@ -19,6 +20,8 @@
 export interface Env {
   /** Raw URL of the feed.json published by the fetcher workflow. */
   FEED_SOURCE_URL?: string
+  /** Raw URL of articles.json. Derived from FEED_SOURCE_URL unless set. */
+  ARTICLES_SOURCE_URL?: string
 }
 
 const DEFAULT_FEED_SOURCE =
@@ -62,6 +65,29 @@ export default {
 
     if (url.pathname === '/diag') {
       return json(await diagnose(env))
+    }
+
+    // Full article text for the reachable stories, published alongside the feed.
+    // Served as its own route so the list stays a ~36 kB request; this one is
+    // ~100 kB and is only wanted once per refresh.
+    if (url.pathname === '/articles') {
+      try {
+        const res = await fetch(articlesUrl(env), {
+          headers: { Accept: 'application/json' },
+          cf: { cacheTtl: EDGE_TTL, cacheEverything: true },
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status} from the article source`)
+        return new Response(res.body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            ...corsHeaders(),
+            'Cache-Control': `public, max-age=${EDGE_TTL}, stale-while-revalidate=600`,
+          },
+        })
+      } catch (err) {
+        return json({ error: `articles unavailable: ${(err as Error).message}` }, 502)
+      }
     }
 
     // "/" and /assets/* are static files — see [assets] in wrangler.toml.
@@ -149,6 +175,11 @@ async function diagnose(env: Env): Promise<Record<string, unknown>> {
 
 function sourceUrl(env: Env): string {
   return env.FEED_SOURCE_URL || DEFAULT_FEED_SOURCE
+}
+
+/** Derived from the feed URL so there is only one place to point at a repo. */
+function articlesUrl(env: Env): string {
+  return env.ARTICLES_SOURCE_URL || sourceUrl(env).replace(/feed\.json(\?|$)/, 'articles.json$1')
 }
 
 function parseSourceFilter(raw: string | null, feed: FeedFile): Set<string> {

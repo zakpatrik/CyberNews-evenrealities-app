@@ -65,6 +65,29 @@ function feedUpdatedAt(): number {
   return feedUpdated
 }
 
+/** The published payloads, read off-counter so the harness can assert against them. */
+let liveItems: Array<{ id: string; src: string; summary: string }> = []
+let liveArticles: Record<string, { text: string; chars: number; source: string }> = {}
+
+async function loadPublished(): Promise<void> {
+  try {
+    const feed = (await (await uncountedFetch(FEED_URL)).json()) as {
+      updated: number
+      items: typeof liveItems
+    }
+    feedUpdated = feed.updated
+    liveItems = feed.items
+  } catch {
+    feedUpdated = 0
+  }
+  try {
+    const url = FEED_URL.replace(/\/feed(\?|$)/, '/articles$1')
+    liveArticles = ((await (await uncountedFetch(url)).json()) as { items: typeof liveArticles }).items ?? {}
+  } catch {
+    liveArticles = {}
+  }
+}
+
 function currentConfirm(): string[] {
   const last = lastCall('rebuild')
   if (!last) return []
@@ -84,6 +107,8 @@ function currentDetail(): string | undefined {
 }
 
 async function main(): Promise<void> {
+  await loadPublished()
+
   console.log('--- bootstrap ---')
 
   const created = calls.find(c => c.name === 'create')
@@ -125,6 +150,31 @@ async function main(): Promise<void> {
   console.log(`        detail: "${(detail ?? '').slice(0, 60).replace(/\n/g, ' | ')}…"`)
 
   check(readStorage('cybernews.lastSeenTs') !== undefined, 'last-seen timestamp persisted')
+
+  console.log('--- full article text ---')
+  check(network.articleRequests === 1, 'the article bundle was fetched once, with the feed', `${network.articleRequests}`)
+
+  // Which story is open, and does the published bundle carry its body?
+  const opened = liveItems[2]
+  const body = liveArticles[opened?.id ?? '']
+  const hasBody = Boolean(body && body.chars > 0)
+  const marked = / · summary\b/.test(detail ?? '')
+
+  check(hasBody !== marked, 'the summary marker matches whether a body exists', `body=${hasBody} marked=${marked}`)
+
+  if (hasBody) {
+    const pager = / · (\d+)\/(\d+)/.exec(detail ?? '')
+    const pageCount = pager ? Number(pager[2]) : 1
+    const summaryPages = Math.max(1, Math.ceil(byteLen(opened.summary) / 340))
+    check(pageCount > summaryPages, 'the article runs longer than its teaser would', `${pageCount} vs ~${summaryPages}`)
+    check(
+      (detail ?? '').includes(body.text.slice(0, 40)),
+      'page one starts at the beginning of the article',
+    )
+    console.log(`        ${opened.src} · ${body.chars} chars · ${pageCount} pages · from ${body.source}`)
+  } else {
+    console.log(`        ${opened?.src} has no extracted body; showing the summary`)
+  }
 
   console.log('--- paging ---')
   // The pager rides on the source line, so it must survive an in-place update.
@@ -215,13 +265,6 @@ async function main(): Promise<void> {
   )
 
   console.log('--- refresh pacing ---')
-  // Read the publish stamp off-counter, so this bookkeeping does not pollute
-  // the very number under test.
-  try {
-    feedUpdated = ((await (await uncountedFetch(FEED_URL)).json()) as { updated: number }).updated
-  } catch {
-    feedUpdated = 0
-  }
   const feedAgeMin = feedUpdatedAt() ? Math.round((Date.now() / 1000 - feedUpdatedAt()) / 60) : -1
 
   const afterBootstrap = network.feedRequests
