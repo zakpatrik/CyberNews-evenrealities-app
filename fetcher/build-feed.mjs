@@ -61,7 +61,8 @@ if (merged.length === 0) {
 }
 
 console.log(`Extracting full text for the ${readable.length} reachable stories…`)
-const extracted = await extractArticles(readable, msg => console.log(msg))
+const previousArticles = readPreviousArticles(articlesOut)
+const extracted = await extractArticles(readable, previousArticles, msg => console.log(msg))
 
 const articles = {
   updated: nowSec(),
@@ -101,6 +102,16 @@ if (live < SOURCES.length && process.env.GITHUB_STEP_SUMMARY) {
     .filter(s => !s.ok)
     .map(s => `- **${s.id}** failed: ${s.error}${s.stale ? ' (served stale)' : ''}`)
   writeFileSync(process.env.GITHUB_STEP_SUMMARY, `### Feed sources down\n${lines.join('\n')}\n`, { flag: 'a' })
+}
+
+function readPreviousArticles(path) {
+  if (!existsSync(path)) return {}
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'))
+    return typeof parsed.items === 'object' && parsed.items !== null ? parsed.items : {}
+  } catch {
+    return {}
+  }
 }
 
 function readPrevious(path) {

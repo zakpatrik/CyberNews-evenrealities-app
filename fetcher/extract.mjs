@@ -42,9 +42,29 @@ const TRAILING_NOISE = [
   /Share (this )?(article|post)( on)?[\s\S]{0,80}$/i,
 ]
 
-export async function extractArticles(items, log = () => {}) {
+/**
+ * @param items    stories to get bodies for
+ * @param previous bodies from the last run, keyed by id
+ *
+ * A story's text never changes once published, so anything already extracted is
+ * reused verbatim. That keeps each run to the handful of genuinely new stories
+ * instead of re-fetching all twenty pages every hour, and it means a source
+ * that blocks us today still shows the text we captured yesterday.
+ */
+export async function extractArticles(items, previous = {}, log = () => {}) {
   const out = {}
-  const queue = [...items]
+  const fresh = []
+
+  for (const item of items) {
+    const cached = previous[item.id]
+    if (cached && cached.chars > 0) out[item.id] = cached
+    else fresh.push(item)
+  }
+
+  const reused = items.length - fresh.length
+  if (reused > 0) log(`  ${reused} already had text from an earlier run`)
+
+  const queue = [...fresh]
   const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
     for (let item = queue.shift(); item; item = queue.shift()) {
       out[item.id] = await extractOne(item, log)

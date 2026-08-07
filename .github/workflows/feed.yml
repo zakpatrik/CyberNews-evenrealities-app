@@ -44,15 +44,28 @@ jobs:
 
       - name: Commit when the feed changed
         run: |
-          if git diff --quiet -- feed.json articles.json; then
-            echo "No change."
-            exit 0
-          fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add feed.json articles.json
-          git commit -m "feed: $(node -e "console.log(require('./feed.json').count)") items, $(node -e "console.log(require('./articles.json').count)") with full text"
-          # The schedule is tighter than a slow push, so rebase past any commit
-          # that landed while this run was working.
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-          git push
+
+          # Never rebase these. Both sides regenerate the whole file, so a
+          # concurrent run guarantees a conflict that has no meaningful
+          # resolution — the newest content simply wins. Replay the generated
+          # files as one commit on top of whatever the remote currently is.
+          for attempt in 1 2 3; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git reset --mixed "origin/${GITHUB_REF_NAME}"
+            git add feed.json articles.json
+
+            if git diff --cached --quiet; then
+              echo "No change."
+              exit 0
+            fi
+
+            git commit -m "feed: $(node -e "console.log(require('./feed.json').count)") items, $(node -e "console.log(require('./articles.json').count)") with full text"
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "Push raced with another run, retrying ($attempt/3)."
+          done
+          echo "Could not push after 3 attempts."
+          exit 1
