@@ -234,12 +234,6 @@ reachable from wherever you are running it.
 Remember to point the app back at the deployed Worker before packaging — a
 `.ehpk` built against `localhost` installs fine and never loads a story.
 
-## Not done yet
-
-- **Locked-phone behaviour.** Reviewers test it, and this app has not been. It
-  stops its refresh timer on `FOREGROUND_EXIT_EVENT`, which is the relevant
-  hook, but that path has only been exercised synthetically.
-
 ## Tests
 
 Both need the Worker running (`npm run worker:dev`).
@@ -379,12 +373,18 @@ and fell off the bottom of the canvas.
 
 ## Known gaps
 
-- Verified in the simulator, not on hardware. The rendered-size budgets above
-  are calibrated to the simulator's font metrics; if the glasses render slightly
-  wider, list rows will wrap. `LIST_ITEM_MAX_BYTES` is the dial to turn.
+- The rendered-size budgets are calibrated against the simulator's font
+  metrics and confirmed on real glasses, but they carry no margin for a
+  firmware that renders wider. `LIST_ITEM_MAX_BYTES` is the dial to turn if
+  list rows ever start wrapping.
 - `TextContainerUpgrade.contentLength` is set to a byte count. The SDK does not
   document the unit; every other length in the API is bytes.
-- No offline cache. A failed refresh keeps the last list on screen but survives
-  neither an app restart nor a cold start without network.
-- Only the newest 20 stories are reachable. Source filtering (`?src=THN,BC`) is
-  already supported by the Worker but not yet surfaced in the UI.
+- Nothing survives a cold start. A failed refresh keeps the current list and
+  article bodies on screen, but they live in memory only — relaunching without
+  a network gives an empty list.
+- Only the page you are on is guaranteed offline. Deeper pages fetch their
+  bodies on arrival and keep them, so browsing back is free but browsing
+  forward is not.
+- Source filtering (`?src=THN,BC`) works in the Worker but is not surfaced in
+  the UI. With Cybersecurity News publishing ~30 stories a day against The
+  Record's ~4, the newest-first list leans heavily towards the loudest source.
