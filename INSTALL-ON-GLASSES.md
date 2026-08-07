@@ -126,8 +126,10 @@ look at the Actions tab. A `sources` entry with `ok: false` means one site
 blocked that run; the fetcher keeps its previous stories, so the list stays
 populated but that source ages.
 
-**"2 src down" in the header.** One or more feeds failed on the last publish and
-had nothing to carry over. It is reported rather than hidden on purpose.
+The glasses do not report a blocked source, because there is nothing to do
+about it and nothing goes missing from the list. If it stays blocked, the age
+in the header stops moving — that is the symptom worth noticing. The detail is
+on the companion screen, in the console and at `/diag`.
 
 **Rows all from one source.** Not a fault. The list is strictly newest-first
 across all four, and one site can genuinely dominate a quiet hour.

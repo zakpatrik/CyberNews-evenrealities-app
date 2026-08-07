@@ -69,11 +69,15 @@ function headerText(): string {
 
   const unread = countUnread(state.items, state.lastSeenTs)
   const right = unread > 0 ? `${unread} new` : timeAgo(state.updated)
-  const degraded = state.errors.length > 0 ? ` · ${state.errors.length} src down` : ''
 
+  // Source failures are deliberately not shown here. A blocked source keeps its
+  // stories from the previous run, so there is nothing for the reader to do and
+  // nothing missing from the list. Staleness that does matter still shows,
+  // through the age on the right. The detail goes to the companion screen,
+  // the console and /diag.
   const pages = pageCount()
   const where = pages > 1 ? `${state.listPage + 1}/${pages} of ${state.items.length}` : `${state.items.length}`
-  return `CyberNews · ${where}${degraded} · ${right}`
+  return `CyberNews · ${where} · ${right}`
 }
 
 /** Total pages, given that a paged list spends one row on navigation. */
