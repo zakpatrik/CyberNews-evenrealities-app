@@ -4,14 +4,14 @@
  * Serves two things: the built glasses app (via [assets]) and the aggregated
  * feed. It deliberately does NOT fetch the source feeds itself.
  *
- * Two of the four sites refuse requests originating from Cloudflare's network —
+ * Two of the sites refuse requests originating from Cloudflare's network —
  * BleepingComputer answers error 1106, CybersecurityNews serves a captcha
  * challenge — and every workaround probed (FeedBurner mirrors, public CORS
  * proxies, Google News) was either wrong content, down, or rate-limited. So the
  * fetching moved to a GitHub Actions cron, which publishes feed.json, and this
  * Worker reads that.
  *
- *   GET /feed?limit=60&src=THN,BC
+ *   GET /feed?limit=100&src=THN,BC
  *   GET /articles
  *   GET /health
  *   GET /diag
@@ -29,7 +29,7 @@ const DEFAULT_FEED_SOURCE =
 
 /** The fetcher publishes hourly, so caching below that just re-reads unchanged JSON. */
 const EDGE_TTL = 900 // seconds
-const DEFAULT_LIMIT = 60
+const DEFAULT_LIMIT = 100
 /** Three missed hourly runs — by then the workflow has stopped, not hiccuped. */
 const STALE_AFTER = 3 * 3600
 

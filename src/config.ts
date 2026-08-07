@@ -43,7 +43,7 @@ export const CONFIRM_INDEX_NO = 0
 export const CONFIRM_INDEX_YES = 1
 
 /** How many stories to pull from the aggregator. */
-export const FEED_LIMIT = 60
+export const FEED_LIMIT = 100
 
 /** Firmware caps a list at 20 items; anything beyond this is simply not shown. */
 export const MAX_LIST_ITEMS = 20

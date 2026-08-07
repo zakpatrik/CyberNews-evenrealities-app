@@ -16,7 +16,10 @@ export const SOURCES = [
   { id: 'THN', label: 'The Hacker News', url: 'https://feeds.feedburner.com/TheHackersNews' },
   { id: 'BC', label: 'BleepingComputer', url: 'https://www.bleepingcomputer.com/feed/' },
   { id: 'CSN', label: 'Cybersecurity News', url: 'https://cybersecuritynews.com/feed/' },
-  { id: 'DR', label: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml' },
+  // Replaced Dark Reading, whose article pages sit behind a Cloudflare JS
+  // challenge — only its 156-character teaser was ever readable. The Record
+  // publishes at the same rate (~3.8/day) and hands over the whole article.
+  { id: 'TR', label: 'The Record', url: 'https://therecord.media/feed' },
 ]
 
 /** BleepingComputer rejects requests lacking both a browser UA and an XML Accept. */

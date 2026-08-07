@@ -40,7 +40,7 @@ jobs:
         run: npm ci || npm install
 
       - name: Build feed.json and articles.json
-        run: node fetcher/build-feed.mjs --out feed.json --articles articles.json --limit 60
+        run: node fetcher/build-feed.mjs --out feed.json --articles articles.json --limit 100
 
       - name: Commit when the feed changed
         run: |

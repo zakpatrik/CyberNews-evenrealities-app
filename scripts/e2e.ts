@@ -124,7 +124,7 @@ async function main(): Promise<void> {
     `max ${Math.max(...rows.map(byteLen))}B`,
   )
   check(
-    rows.every(r => /^(THN|BC|CSN|DR) /.test(r)),
+    rows.every(r => /^(THN|BC|CSN|TR) /.test(r)),
     'every row carries a source tag',
   )
 

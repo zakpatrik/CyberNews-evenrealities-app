@@ -2,7 +2,7 @@
 
 Cybersecurity headline reader for the Even Realities G2. Merges four feeds into
 one chronological list on the glasses: **The Hacker News**, **BleepingComputer**,
-**Cybersecurity News** and **Dark Reading**.
+**Cybersecurity News** and **The Record**.
 
 Scroll the list on the temple touchpad, tap to read the full article, double-tap to go
 back — and again to bring up the exit confirmation.
@@ -36,7 +36,7 @@ resolves to "No", never to exit.
 │ └────────────────────────────────────────────┘ │
 │   BC  OpenAI rolls out a major ChatGPT upg…    │  list container,
 │   CSN Shai-Hulud CHAINDROP Worm Backdoors …    │  capped at 20 rows
-│   DR  The Coordination Gap: How Attackers …    │
+│   TR  Ransomware gang leaks negotiation …     │
 └────────────────────────────────────────────────┘
                    576 × 288
 ```
@@ -71,7 +71,7 @@ two of them refuse requests from Cloudflare's network:
 | Source | From a normal host | From a Cloudflare Worker |
 |---|---|---|
 | The Hacker News | 200 | 200 |
-| Dark Reading | 200 | 200 |
+| The Record | 200 | 200 |
 | BleepingComputer | 200 | **403, error 1106** |
 | CybersecurityNews | 200 | **202 → `/.well-known/sgcaptcha/`** |
 
@@ -280,16 +280,20 @@ works with no signal.
 | Cybersecurity News | the feed's `content:encoded` | 3.5–15k chars |
 | The Hacker News | article page + Readability | 3.4–5.9k |
 | BleepingComputer | article page + Readability | 3.1–3.7k |
-| Dark Reading | **not available** — summary only | 156 |
+| The Record | article page + Readability | 3.3k |
 
-Dark Reading's article pages sit behind a Cloudflare JS challenge that answered
-403 to every header combination tried, including a full browser fingerprint and
-a Googlebot UA. Getting past it would mean driving a headless browser
-specifically to defeat a control the site put up deliberately, so DR keeps its
-summary and the detail view labels it `· summary` rather than passing a teaser
-off as the article.
+**Dark Reading was dropped for this.** Its article pages sit behind a Cloudflare
+JS challenge that answered 403 to every header combination tried, including a
+full browser fingerprint and a Googlebot UA — so only its 156-character teaser
+was ever readable on the glasses. Getting past it would have meant driving a
+headless browser specifically to defeat a control the site put up deliberately.
+The Record publishes at the same rate (~3.8/day) and hands over the article.
 
-18 of 20 come back with a body, averaging 5.8k characters — a **104 kB** bundle,
+If a source ever stops cooperating, the story keeps its RSS summary and the
+detail view labels it `· summary` rather than passing a teaser off as the
+article.
+
+All 20 come back with a body, averaging 5.8k characters — a **104 kB** bundle,
 and up to **47 pages** on a 576×288 canvas. Scrolling pages as well as tapping,
 which is the gentler way through a long one.
 

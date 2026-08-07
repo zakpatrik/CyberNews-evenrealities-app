@@ -1,13 +1,15 @@
 /**
  * Full article text, for reading on the glasses instead of just the teaser.
  *
- * Three of the four sources give up their article body: Cybersecurity News
- * ships it in the feed's content:encoded, The Hacker News and BleepingComputer
- * hand over the page to an ordinary request. Dark Reading does not — its
- * article pages sit behind a Cloudflare JS challenge that answers 403 to every
- * header combination. Defeating that would mean driving a headless browser
- * specifically to get past a control the site put up deliberately, so DR keeps
- * its RSS summary and is marked as such.
+ * All four sources give up their article body: Cybersecurity News ships it in
+ * the feed's content:encoded, and the rest hand over the page to an ordinary
+ * request. Dark Reading used to be the exception — its article pages sit behind
+ * a Cloudflare JS challenge that answered 403 to every header combination, and
+ * defeating that would have meant driving a headless browser specifically to
+ * get past a control the site put up deliberately. It was replaced instead.
+ *
+ * A source that stops cooperating still degrades rather than breaks: the story
+ * keeps its RSS summary and the detail view labels it.
  */
 
 import { Readability } from '@mozilla/readability'

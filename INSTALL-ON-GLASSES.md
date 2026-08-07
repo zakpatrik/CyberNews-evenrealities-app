@@ -57,7 +57,7 @@ CyberNews · 20 of 60 · 12 new
 └──────────────────────────────────────────┘
   BC  OpenAI rolls out a major ChatGPT up…
   CSN Shai-Hulud CHAINDROP Worm Backdoors…
-  DR  The Coordination Gap: How Attackers…
+  TR  Ransomware gang leaks negotiation logs…
 ```
 
 | Gesture | List | Story | Exit confirmation |
@@ -74,9 +74,8 @@ Opening a story gives you the **whole article**, not the RSS teaser — typicall
 24m · 4/18`). Scrolling turns pages as well as tapping, which is easier on a
 long one.
 
-Dark Reading stories show `· summary` on that line instead. Their article pages
-are behind a Cloudflare challenge, so only the RSS teaser is available and the
-app says so rather than pretending.
+If a source ever blocks extraction, that story shows `· summary` on the same
+line and you get the RSS teaser — the app says so rather than pretending.
 
 The bodies download once per refresh, so opening a story is instant and works
 with no signal.

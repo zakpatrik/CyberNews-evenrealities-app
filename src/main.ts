@@ -117,7 +117,7 @@ async function openDetail(index: number): Promise<void> {
   state.detailIndex = index
 
   // Prefer the downloaded article; fall back to the RSS summary when extraction
-  // failed for this source, which is what happens for Dark Reading.
+  // failed for this source — the marker below says which you are reading.
   const article = state.articles[item.id]
   const body = article && article.chars > 0 ? article.text : item.summary
   state.detailFull = Boolean(article && article.chars > 0)

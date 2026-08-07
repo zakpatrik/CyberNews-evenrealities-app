@@ -15,7 +15,7 @@ import { extractArticles } from './extract.mjs'
 const args = process.argv.slice(2)
 const out = valueOf('--out') ?? 'feed.json'
 const articlesOut = valueOf('--articles') ?? out.replace(/feed\.json$/, 'articles.json')
-const limit = Number(valueOf('--limit') ?? 60)
+const limit = Number(valueOf("--limit") ?? 100)
 /** Matches MAX_LIST_ITEMS in the app — the firmware shows no more than this. */
 const articleCount = Number(valueOf('--articles-limit') ?? 20)
 

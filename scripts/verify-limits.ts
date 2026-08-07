@@ -24,7 +24,7 @@ import {
   DETAIL_CHROME_BYTES,
 } from '../src/config'
 
-const FEED = 'http://localhost:8787/feed?limit=60'
+const FEED = 'http://localhost:8787/feed?limit=100'
 const ARTICLES = 'http://localhost:8787/articles'
 
 /** Hard firmware caps, quoted from the simulator changelog (v0.7.1, v0.7.3). */
