@@ -1,0 +1,21 @@
+{
+  "package_id": "com.sysnetshield.cybernews",
+  "edition": "202601",
+  "name": "CyberNews",
+  "version": "0.1.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.10",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Fetches cybersecurity headlines from the CyberNews aggregator service.",
+      "whitelist": [
+        "https://cybernews-feed.mail-40f.workers.dev"
+      ]
+    }
+  ],
+  "supported_languages": [
+    "en"
+  ]
+}

@@ -1,0 +1,23 @@
+name = "cybernews-feed"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# Serve the built glasses app from this same Worker.
+#
+# The QR sideload just points the phone's WebView at a URL, and the docs only
+# use a LAN IP as their example rather than requiring one. Hosting the app here
+# means it needs no dev machine on the user's network, and app and feed end up
+# same-origin — one whitelist entry, no CORS surface at all.
+#
+# Assets win for any path they match; everything else falls through to the
+# Worker, which is why /feed must not also be a file in dist/.
+[assets]
+directory = "../dist"
+
+[vars]
+# Raw URL of feed.json, published by the .github/workflows/feed.yml cron.
+# Point this at your own repo after the first successful workflow run.
+FEED_SOURCE_URL = "https://raw.githubusercontent.com/zakpatrik/CyberNews-evenrealities-app/main/feed.json"
+
+# Feeds are public, so there is nothing secret to configure here. If you ever add
+# an API key, use `wrangler secret put` — never bake it into the app bundle.

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.ehpk
+.wrangler/
+
+# Never commit Cloudflare credentials
+.dev.vars
+.cloudflare-token

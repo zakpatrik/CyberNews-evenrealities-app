@@ -1,0 +1,80 @@
+/**
+ * Tunables.
+ *
+ * Two different kinds of limit live here, and conflating them causes bugs:
+ *
+ *  - Hard firmware caps (20 list items, 63 bytes per item, 999 bytes per text
+ *    container). Exceed one and the container fails to render outright.
+ *  - Rendered-size budgets, measured in the simulator. These sit well below the
+ *    firmware caps because text that is legal still wraps or clips once it
+ *    exceeds 576x288, which quietly breaks the layout.
+ *
+ * Both are enforced byte-wise in format.ts, since feed headlines are full of
+ * multi-byte punctuation and character counts would understate them.
+ */
+
+/** Feed aggregator endpoint. Override per-environment via VITE_FEED_URL (.env). */
+// Optional chaining keeps this module importable outside Vite (e.g. the
+// limit-verification script), where import.meta.env does not exist.
+export const FEED_URL: string =
+  import.meta.env?.VITE_FEED_URL ?? 'https://cybernews-feed.YOUR-SUBDOMAIN.workers.dev/feed'
+
+/** Display geometry, in device pixels. */
+export const SCREEN_W = 576
+export const SCREEN_H = 288
+export const HEADER_H = 34
+
+/** Container IDs — stable per view so events can be attributed unambiguously. */
+export const ID_HEADER = 1
+export const ID_LIST = 2
+export const ID_DETAIL = 3
+export const ID_CONFIRM = 4
+
+/**
+ * Exit confirmation wording. "No" must stay first: the list widget opens on
+ * index 0, and that is the only mechanism for making cancel the default.
+ */
+export const CONFIRM_EXIT_QUESTION = 'Exit CyberNews?'
+export const CONFIRM_EXIT_OPTIONS = ['No — keep reading', 'Yes, exit'] as const
+export const CONFIRM_INDEX_NO = 0
+export const CONFIRM_INDEX_YES = 1
+
+/** How many stories to pull from the aggregator. */
+export const FEED_LIMIT = 60
+
+/** Firmware caps a list at 20 items; anything beyond this is simply not shown. */
+export const MAX_LIST_ITEMS = 20
+
+/**
+ * Rendered width, not the firmware cap.
+ *
+ * The firmware accepts 63 bytes per list item, but a 63-byte headline is wider
+ * than 576px and wraps to a second line — which knocks the whole list out of
+ * alignment and appends a second ellipsis. Measured in the simulator: 58 still
+ * renders on one line, 63 wraps. 56 keeps a margin for headlines heavy in
+ * capitals and acronyms, which are wider per character.
+ */
+export const LIST_ITEM_MAX_BYTES = 56
+
+/**
+ * Rendered height, not the firmware cap.
+ *
+ * The firmware accepts 999 bytes per text container, but only ~10 lines fit in
+ * 288px and anything past that is silently clipped. Measured in the simulator:
+ * a two-line headline plus source line leaves six body lines, so the body gets
+ * DETAIL_MAX_BYTES - DETAIL_CHROME_BYTES = 340.
+ */
+export const DETAIL_MAX_BYTES = 500
+/** Bytes reserved on every detail page for the headline and source line. */
+export const DETAIL_CHROME_BYTES = 160
+/** Keeps the detail headline to at most two rendered lines. */
+export const DETAIL_TITLE_MAX_BYTES = 110
+
+/** Foreground refresh interval. The Worker caches for 5 min, so polling faster is wasted. */
+export const REFRESH_MS = 5 * 60 * 1000
+
+/** Network timeout for a feed request. */
+export const FETCH_TIMEOUT_MS = 15_000
+
+/** Persisted key for the newest timestamp the user has already seen. */
+export const STORAGE_KEY_LAST_SEEN = 'cybernews.lastSeenTs'

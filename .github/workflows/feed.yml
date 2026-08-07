@@ -1,0 +1,57 @@
+name: feed
+
+# Fetching happens here rather than in the Cloudflare Worker because
+# BleepingComputer and CybersecurityNews both refuse requests coming from
+# Cloudflare's network. Runners are ordinary hosts, so the feeds answer normally.
+on:
+  schedule:
+    # Hourly. GitHub delays scheduled runs under load, so treat this as "about
+    # once an hour" rather than on the hour.
+    - cron: '0 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'fetcher/**'
+      - '.github/workflows/feed.yml'
+
+permissions:
+  contents: write
+
+# A manual run firing next to a scheduled one would race on the same commit.
+concurrency:
+  group: feed
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install fetcher deps
+        working-directory: fetcher
+        run: npm ci || npm install
+
+      - name: Build feed.json
+        run: node fetcher/build-feed.mjs --out feed.json --limit 60
+
+      - name: Commit when the feed changed
+        run: |
+          if git diff --quiet -- feed.json; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add feed.json
+          git commit -m "feed: $(node -e "console.log(require('./feed.json').count)") items"
+          # The schedule is tighter than a slow push, so rebase past any commit
+          # that landed while this run was working.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push

@@ -1,0 +1,13 @@
+{
+  "name": "cybernews-fetcher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Builds feed.json outside Cloudflare's network, where all four sources answer.",
+  "scripts": {
+    "build-feed": "node build-feed.mjs --out ../feed.json"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  }
+}
