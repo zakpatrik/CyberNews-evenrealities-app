@@ -264,6 +264,29 @@ checked on real hardware** — the simulator re-implements the drawing logic
 rather than sharing firmware code, and its own README warns that font rendering
 and list scroll positioning can differ.
 
+## Refresh pacing
+
+The feed changes once an hour, when the workflow publishes. Requests in between
+cannot return anything new, and on glasses a needless request is radio time is
+battery. So `src/schedule.ts` does two things:
+
+- **Skip.** A fetch is refused if the last one was under 10 minutes ago.
+  Opening the app ten times an hour costs one request, not ten.
+- **Aim.** The next wake-up targets just past the next expected publish. Feed 10
+  minutes old → look again in ~50, not in 5. Floored at 10 min, capped at 60,
+  plus up to 2 min of jitter so devices do not all wake on the same second.
+
+Failures back off from 2 min, doubling to 60. Backgrounding cancels the timer
+outright (`FOREGROUND_EXIT_EVENT`), so a pocketed phone makes no requests.
+
+The skip test is keyed on **when we last fetched**, not on when the feed was
+last published. Those differ, and using the publish stamp gets it wrong: a
+20-minute-old feed reads as stale, so every reopen refetches, even though
+nothing new exists until the next hourly publish. The e2e caught exactly that.
+
+`nextRefreshDelay` and `isFreshEnough` are pure and covered by `npm run verify`,
+including clock skew putting the publish stamp in the future.
+
 ## Limits
 
 Two different kinds, and conflating them causes bugs. Both are enforced in
@@ -304,6 +327,7 @@ and fell off the bottom of the canvas.
 | `src/format.ts` | Byte-aware truncation and pagination; pure, so it is testable |
 | `src/feed.ts` | Worker client, response validation, unread count |
 | `src/config.ts` | Firmware limits, geometry, container IDs, tunables |
+| `src/schedule.ts` | Refresh pacing; pure, so the battery logic is testable |
 | `fetcher/parse.mjs` | RSS fetch, parse, normalise, dedupe — runs in CI |
 | `fetcher/build-feed.mjs` | Writes feed.json, carries a failed source's last items |
 | `worker/src/index.ts` | Serves the app and the published feed; no parsing |

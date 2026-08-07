@@ -10,10 +10,10 @@
  *   npm run e2e        (needs the Worker running: npm run worker:dev)
  */
 
-import { calls, fire, lastCall, readStorage } from './mock-sdk'
+import { calls, fire, lastCall, readStorage, network, uncountedFetch } from './mock-sdk'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { byteLen } from '../src/format'
-import { ID_LIST, ID_DETAIL, ID_CONFIRM, MAX_LIST_ITEMS } from '../src/config'
+import { ID_LIST, ID_DETAIL, ID_CONFIRM, MAX_LIST_ITEMS, FEED_URL } from '../src/config'
 
 // Importing main.ts boots the app: it awaits the bridge, creates the start-up
 // page and performs the first refresh before this module body runs.
@@ -58,6 +58,11 @@ function currentRows(): string[] {
     if (list?.itemContainer?.itemName) return list.itemContainer.itemName
   }
   return []
+}
+
+let feedUpdated = 0
+function feedUpdatedAt(): number {
+  return feedUpdated
 }
 
 function currentConfirm(): string[] {
@@ -209,9 +214,40 @@ async function main(): Promise<void> {
     `exitMode=${lastCall('shutdown')?.arg}`,
   )
 
+  console.log('--- refresh pacing ---')
+  // Read the publish stamp off-counter, so this bookkeeping does not pollute
+  // the very number under test.
+  try {
+    feedUpdated = ((await (await uncountedFetch(FEED_URL)).json()) as { updated: number }).updated
+  } catch {
+    feedUpdated = 0
+  }
+  const feedAgeMin = feedUpdatedAt() ? Math.round((Date.now() / 1000 - feedUpdatedAt()) / 60) : -1
+
+  const afterBootstrap = network.feedRequests
+  check(afterBootstrap === 1, 'bootstrap made exactly one feed request', `${afterBootstrap}`)
+
+  // Reopening must not refetch, regardless of how old the published feed is.
+  // Gating on publish age instead of last-fetch time made this depend on when
+  // the cron last ran, and refetched on every reopen for most of the hour.
+  fire({ sysEvent: { eventType: OsEventTypeList.FOREGROUND_ENTER_EVENT } })
+  await settle()
+  fire({ sysEvent: { eventType: OsEventTypeList.FOREGROUND_ENTER_EVENT } })
+  await settle()
+  fire({ sysEvent: { eventType: OsEventTypeList.FOREGROUND_ENTER_EVENT } })
+  await settle()
+
+  const extra = network.feedRequests - afterBootstrap
+  check(extra === 0, 'three reopens just after a fetch cost no requests', `${extra}`)
+  console.log(`        published feed was ${feedAgeMin} min old; ${extra} extra request(s)`)
+
   console.log('--- lifecycle ---')
   fire({ sysEvent: { eventType: OsEventTypeList.FOREGROUND_EXIT_EVENT } })
   await settle()
+  const afterBackground = network.feedRequests
+  await new Promise(r => setTimeout(r, 300))
+  check(network.feedRequests === afterBackground, 'backgrounded app makes no requests')
+
   fire({ sysEvent: { eventType: OsEventTypeList.SYSTEM_EXIT_EVENT } })
   await settle()
   check(true, 'lifecycle events handled without throwing')

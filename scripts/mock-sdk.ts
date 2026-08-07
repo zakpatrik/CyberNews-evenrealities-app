@@ -31,6 +31,22 @@ if (!g.document) {
   g.document = { getElementById: () => null }
 }
 
+/**
+ * Count feed requests, so the e2e can assert the app is not re-fetching a file
+ * that cannot have changed — the whole point of the refresh pacing.
+ */
+export const network = { feedRequests: 0 }
+
+const realFetch = g.fetch as typeof fetch
+g.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+  if (target.includes('/feed')) network.feedRequests++
+  return realFetch(input as RequestInfo, init)
+}) as typeof fetch
+
+/** Fetch without touching the counter, for the harness's own bookkeeping. */
+export const uncountedFetch: typeof fetch = (input, init) => realFetch(input as RequestInfo, init)
+
 export async function waitForEvenAppBridge(): Promise<Record<string, unknown>> {
   return {
     createStartUpPageContainer: async (c: unknown) => {

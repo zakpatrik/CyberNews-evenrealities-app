@@ -16,6 +16,7 @@ import {
   byteLen,
   timeAgo,
 } from '../src/format'
+import { isFreshEnough, nextRefreshDelay } from '../src/schedule'
 import {
   MAX_LIST_ITEMS,
   LIST_ITEM_MAX_BYTES,
@@ -81,6 +82,51 @@ async function main(): Promise<void> {
   for (const p of monsterPages) {
     check(byteLen(p) <= DETAIL_MAX_BYTES - DETAIL_CHROME_BYTES, 'oversized-token page fits budget')
   }
+
+  console.log('--- refresh pacing ---')
+
+  const MIN = 10 * 60_000
+  const MAX = 60 * 60_000
+  const HOUR = 60 * 60_000
+  const now = 1_800_000_000_000
+  const secAgo = (ms: number) => Math.floor((now - ms) / 1000)
+
+  // isFreshEnough takes the last *fetch* time in ms, not the publish stamp.
+  check(!isFreshEnough(0, 0, now), 'nothing fetched yet is never fresh')
+  check(!isFreshEnough(now, 0, now), 'zero items is never fresh, however recent the fetch')
+  check(isFreshEnough(now - 60_000, 60, now), 'fetched a minute ago is fresh')
+  check(isFreshEnough(now - 9 * 60_000, 60, now), 'fetched 9 minutes ago is still fresh')
+  check(!isFreshEnough(now - 11 * 60_000, 60, now), 'fetched 11 minutes ago is not')
+  // The bug this replaced: an old publish stamp made every reopen refetch.
+  check(isFreshEnough(now - 60_000, 60, now), 'a stale publish does not force a refetch if we just asked')
+
+  // Aim past the next publish, not at a fixed cadence.
+  check(nextRefreshDelay(secAgo(10 * 60_000), now) === 50 * 60_000, '10 min old -> wait 50 min')
+  check(nextRefreshDelay(secAgo(30 * 60_000), now) === 30 * 60_000, '30 min old -> wait 30 min')
+  check(nextRefreshDelay(secAgo(55 * 60_000), now) === MIN, '55 min old -> floored at 10 min')
+  check(nextRefreshDelay(secAgo(3 * HOUR), now) === MIN, 'long overdue -> floored, not negative')
+  check(nextRefreshDelay(0, now) === MIN, 'no timestamp -> floored, not a huge wait')
+  // A clock skewing the feed into the future must not park the timer for a day.
+  check(nextRefreshDelay(secAgo(-5 * HOUR), now) === MAX, 'future timestamp -> capped at 60 min')
+
+  for (const ageMin of [0, 5, 17, 42, 59, 90]) {
+    for (const jitter of [0, 60_000, 119_999]) {
+      const d = nextRefreshDelay(secAgo(ageMin * 60_000), now, jitter)
+      check(d >= MIN && d <= MAX, 'delay always inside its bounds', `age=${ageMin}m jitter=${jitter} -> ${d}`)
+    }
+  }
+
+  // One request per publish cycle, versus 12 for the old fixed 5-minute timer.
+  const cycle: number[] = []
+  let clock = now
+  for (let i = 0; i < 5; i++) {
+    // Each iteration models waking exactly when a fresh publish is available,
+    // so the stamp has to advance with the clock — not stay pinned to `now`.
+    const d = nextRefreshDelay(Math.floor(clock / 1000), clock)
+    cycle.push(d)
+    clock += d
+  }
+  check(cycle.every(d => d === MAX), 'a feed caught at publish settles to hourly polling', cycle.join(','))
 
   console.log(`  ${checks} synthetic checks, ${failures} failures`)
 

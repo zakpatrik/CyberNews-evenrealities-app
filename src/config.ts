@@ -70,8 +70,31 @@ export const DETAIL_CHROME_BYTES = 160
 /** Keeps the detail headline to at most two rendered lines. */
 export const DETAIL_TITLE_MAX_BYTES = 110
 
-/** Foreground refresh interval. The Worker caches for 5 min, so polling faster is wasted. */
-export const REFRESH_MS = 5 * 60 * 1000
+/**
+ * Refresh pacing.
+ *
+ * The source data changes once an hour — that is how often the fetcher workflow
+ * publishes — so a fixed short interval spends radio time re-reading a file that
+ * cannot have changed. Instead the app aims to wake shortly after the next
+ * publish, and skips the request entirely while what it holds is still fresh.
+ */
+
+/** How often .github/workflows/feed.yml publishes. Keep the two in step. */
+export const PUBLISH_INTERVAL_MS = 60 * 60 * 1000
+/** Floor on the gap between requests, whatever the arithmetic suggests. */
+export const MIN_REFRESH_MS = 10 * 60 * 1000
+/** Ceiling, so a clock skew cannot park the timer for half a day. */
+export const MAX_REFRESH_MS = 60 * 60 * 1000
+/** Spread wake-ups so every device does not hit the same second. */
+export const REFRESH_JITTER_MS = 2 * 60 * 1000
+/** First retry after a failed refresh; doubles up to MAX_REFRESH_MS. */
+export const RETRY_BASE_MS = 2 * 60 * 1000
+/**
+ * Minimum gap between two actual requests. Reopening the app inside this window
+ * reuses what is already loaded: opening the glasses ten times an hour should
+ * cost one request, not ten.
+ */
+export const FRESH_ENOUGH_MS = 10 * 60 * 1000
 
 /** Network timeout for a feed request. */
 export const FETCH_TIMEOUT_MS = 15_000

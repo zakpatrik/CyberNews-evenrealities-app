@@ -9,11 +9,14 @@ import {
 import { fetchFeed, countUnread, type NewsItem } from './feed'
 import { listPage, detailPage, confirmPage, type PageContainers } from './views'
 import { listRowLabel, paginateBytes, detailPageContent, byteLen, timeAgo } from './format'
+import { isFreshEnough, nextRefreshDelay } from './schedule'
 import {
   ID_DETAIL,
   MAX_LIST_ITEMS,
   DETAIL_CHROME_BYTES,
-  REFRESH_MS,
+  MAX_REFRESH_MS,
+  REFRESH_JITTER_MS,
+  RETRY_BASE_MS,
   STORAGE_KEY_LAST_SEEN,
   CONFIRM_EXIT_QUESTION,
   CONFIRM_EXIT_OPTIONS,
@@ -32,13 +35,17 @@ const state = {
   errors: [] as string[],
   /** Newest ts the user has already been shown; drives the "N new" badge. */
   lastSeenTs: 0,
+  /** When we last successfully fetched — distinct from `updated`, the publish time. */
+  lastFetchAt: 0,
   detailIndex: 0,
   detailPages: [] as string[],
   detailPage: 0,
   loading: false,
 }
 
-let refreshTimer: ReturnType<typeof setInterval> | undefined
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+let retryDelay = RETRY_BASE_MS
+let nextRefreshAt = 0
 
 // ---------------------------------------------------------------- rendering
 
@@ -135,16 +142,25 @@ async function showDetailPage(next: number): Promise<void> {
 
 // ------------------------------------------------------------------- data
 
-async function refresh(): Promise<void> {
+async function refresh({ force = false } = {}): Promise<void> {
   if (state.loading) return
+
+  if (!force && isFreshEnough(state.lastFetchAt, state.items.length, Date.now())) {
+    scheduleNextRefresh()
+    return
+  }
+
   state.loading = true
   setCompanionStatus()
 
+  let ok = false
   try {
     const result = await fetchFeed()
     state.items = result.items
     state.updated = result.updated
     state.errors = result.errors
+    state.lastFetchAt = Date.now()
+    ok = true
     if (result.errors.length > 0) console.warn('Feed sources degraded:', result.errors)
   } catch (err) {
     // Keep whatever is already on screen; a failed refresh must not blank the display.
@@ -153,6 +169,9 @@ async function refresh(): Promise<void> {
   } finally {
     state.loading = false
   }
+
+  if (ok) scheduleNextRefresh()
+  else scheduleRetry()
 
   if (state.view === 'list') await renderList()
   else setCompanionStatus()
@@ -178,15 +197,37 @@ async function loadLastSeen(): Promise<void> {
   }
 }
 
-function startAutoRefresh(): void {
-  if (refreshTimer !== undefined) return
-  refreshTimer = setInterval(() => void refresh(), REFRESH_MS)
+/**
+ * Wake shortly after the next expected publish rather than on a fixed cadence.
+ * If the data we hold is 10 minutes old, the next one is ~50 minutes out, so
+ * that is when to look — anything sooner is radio time spent on an unchanged file.
+ */
+function scheduleNextRefresh(): void {
+  stopAutoRefresh()
+  retryDelay = RETRY_BASE_MS
+
+  const jitter = Math.floor(Math.random() * REFRESH_JITTER_MS)
+  const delay = nextRefreshDelay(state.updated, Date.now(), jitter)
+
+  nextRefreshAt = Date.now() + delay
+  refreshTimer = setTimeout(() => void refresh({ force: true }), delay)
+}
+
+/** Back off after a failure so a flat network does not become a polling loop. */
+function scheduleRetry(): void {
+  stopAutoRefresh()
+  const delay = retryDelay
+  retryDelay = Math.min(MAX_REFRESH_MS, retryDelay * 2)
+
+  nextRefreshAt = Date.now() + delay
+  refreshTimer = setTimeout(() => void refresh({ force: true }), delay)
 }
 
 function stopAutoRefresh(): void {
   if (refreshTimer === undefined) return
-  clearInterval(refreshTimer)
+  clearTimeout(refreshTimer)
   refreshTimer = undefined
+  nextRefreshAt = 0
 }
 
 // ----------------------------------------------------------------- events
@@ -221,7 +262,7 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
   }
 
   if (sysType === OsEventTypeList.FOREGROUND_ENTER_EVENT) {
-    startAutoRefresh()
+    // Not forced: reopening the app a minute later should cost nothing.
     void refresh()
     return
   }
@@ -274,11 +315,14 @@ function setCompanionStatus(): void {
   const el = document.getElementById('app')
   if (!el) return
 
+  const nextIn = nextRefreshAt ? Math.max(0, Math.round((nextRefreshAt - Date.now()) / 60000)) : null
+
   const lines = [
     `<strong>CyberNews</strong>`,
     state.loading ? 'Refreshing…' : `${state.items.length} stories · updated ${timeAgo(state.updated)}`,
     `View: ${state.view}`,
     state.errors.length > 0 ? `<span class="warn">${state.errors.join(' · ')}</span>` : 'All sources OK',
+    nextIn === null ? '<span class="hint">Refresh paused</span>' : `<span class="hint">Next refresh in ~${nextIn} min</span>`,
     `<span class="hint">Check the glasses display.</span>`,
   ]
   el.innerHTML = lines.join('<br>')
@@ -295,5 +339,4 @@ const created = await bridge.createStartUpPageContainer(
 // It shows up during dev when hot reload re-runs this against a live container.
 console.log('Page created:', created === 0 ? 'success' : `failed (${created})`)
 
-startAutoRefresh()
 await refresh()
