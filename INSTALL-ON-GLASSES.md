@@ -63,11 +63,12 @@ CyberNews · 20 of 60 · 12 new
 | Gesture | List | Story | Exit confirmation |
 |---|---|---|---|
 | Scroll up/down | move selection | previous/next page | move selection |
-| Tap | open story | next page, then back to list | activate choice |
+| Tap | open story, or turn the page | next page, then back to list | activate choice |
 | Double-tap | ask before exiting | back to list | cancel |
 
-`20 of 60` is not a bug: the firmware caps a list at 20 rows, and the header is
-deliberately honest that the feed holds more.
+The list pages. The firmware renders at most 20 rows, so the last one is
+`>> Older` — tap it for the next 19 stories, and again until it wraps back to
+the newest. The header says where you are: `CyberNews · 2/5 of 80`.
 
 Opening a story gives you the **whole article**, not the RSS teaser — typically
 15–20 pages, up to 47. The pager sits on the source line (`Cybersecurity News ·

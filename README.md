@@ -12,8 +12,13 @@ back — and again to bring up the exit confirmation.
 | Gesture | List | Story | Exit confirmation |
 |---|---|---|---|
 | Scroll up/down | move selection | previous/next page | move selection |
-| Tap | open story | next page, then back to list | activate choice |
+| Tap | open story, or turn the page | next page, then back to list | activate choice |
 | Double-tap | ask before exiting | back to list | cancel |
+
+**The list pages.** The firmware renders at most 20 rows, so reaching story 21
+means repainting the list rather than growing it. When the feed does not fit,
+the last row becomes `>> Older` and the other 19 carry stories; tapping it moves
+on and wraps at the end. The header tracks position: `CyberNews · 2/5 of 80`.
 
 **There is no long-press.** `OsEventTypeList` exposes only click, scroll, and
 double-click; the firmware reports no press duration and no down/up pair, so a
@@ -56,7 +61,7 @@ raw.githubusercontent.com/<you>/<repo>/main/feed.json
 Cloudflare Worker                      ← serves the app and caches the feed
   /            static app bundle (dist/ via [assets])
   /feed        the published JSON, filtered and edge-cached 15 min
-  /articles    full article bodies (~104 kB), edge-cached 15 min
+  /articles    full article bodies; ?ids= slices it to one page (~120 kB)
   /health      liveness
   /diag        feed age + per-source status
         │
