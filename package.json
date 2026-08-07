@@ -10,6 +10,7 @@
     "pack": "evenhub pack app.json dist -o cybernews.ehpk",
     "simulate": "evenhub-simulator http://localhost:5173",
     "qr": "evenhub qr",
+    "qr:img": "node scripts/make-qr.mjs",
     "feed-url": "node scripts/set-feed-url.mjs",
     "verify": "esbuild scripts/verify-limits.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/verify.mjs --log-level=warning && node node_modules/.cache/verify.mjs",
     "e2e": "esbuild scripts/e2e.ts --bundle --platform=node --format=esm --alias:@evenrealities/even_hub_sdk=./scripts/mock-sdk.ts --define:import.meta.env='{\"VITE_FEED_URL\":\"http://localhost:8787/feed\"}' --outfile=node_modules/.cache/e2e.mjs --log-level=warning && node node_modules/.cache/e2e.mjs",

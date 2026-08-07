@@ -166,6 +166,8 @@ on the glasses.
 
 **3. Check it on real hardware before packaging**
 
+Step-by-step, with a scannable QR: [INSTALL-ON-GLASSES.md](INSTALL-ON-GLASSES.md).
+
 The Worker serves the built app as well as the feed, so the QR can point
 straight at it — no dev server, and nothing that needs your phone and your
 machine on the same network:
