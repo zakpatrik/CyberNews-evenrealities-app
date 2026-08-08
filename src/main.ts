@@ -7,7 +7,7 @@ import {
 } from '@evenrealities/even_hub_sdk'
 
 import { fetchFeed, fetchArticles, countUnread, type NewsItem, type ArticleMap } from './feed'
-import { listPage, detailPage, confirmPage, type PageContainers } from './views'
+import { listPage, detailPage, type PageContainers } from './views'
 import { listRowLabel, paginateBytes, detailPageContent, byteLen, timeAgo } from './format'
 import { isFreshEnough, nextRefreshDelay } from './schedule'
 import {
@@ -21,15 +21,11 @@ import {
   REFRESH_JITTER_MS,
   RETRY_BASE_MS,
   STORAGE_KEY_LAST_SEEN,
-  CONFIRM_EXIT_QUESTION,
-  CONFIRM_EXIT_OPTIONS,
-  CONFIRM_INDEX_NO,
-  CONFIRM_INDEX_YES,
 } from './config'
 
 const bridge = await waitForEvenAppBridge()
 
-type View = 'list' | 'detail' | 'confirm'
+type View = 'list' | 'detail'
 
 const state = {
   view: 'list' as View,
@@ -118,17 +114,6 @@ async function turnListPage(): Promise<void> {
   await renderList()
   // Bodies are prefetched only for the newest page; fetch this one's on arrival.
   void ensureArticlesForPage()
-}
-
-/**
- * Ask before leaving. The firmware exposes no long-press event, so double-tap
- * is the only gesture available to open this — which is exactly why it needs a
- * confirmation: double-tap is easy to trigger by accident while scrolling.
- */
-async function renderConfirmExit(): Promise<void> {
-  state.view = 'confirm'
-  await render(confirmPage(CONFIRM_EXIT_QUESTION, [...CONFIRM_EXIT_OPTIONS]))
-  setCompanionStatus()
 }
 
 function detailContent(): string {
@@ -333,17 +318,20 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
   const listType = eventTypeOf(event.listEvent)
   const textType = eventTypeOf(event.textEvent)
 
-  // Double-tap is the universal "back" and must work from any envelope. It never
-  // exits directly: from the list it opens the confirmation, and from the
-  // confirmation it cancels, so no single gesture can drop you out of the app.
+  // Double-tap is the universal "back" and must work from any envelope: out of
+  // a story, then out of the app.
+  //
+  // On the list it hands over to the host with exitMode 1, which raises the
+  // system confirmation layer and lets the user decide. That prompt is the
+  // platform's, not ours — an app-drawn one was rejected in review, and
+  // exitMode 0 is only for tearing down after the user has already confirmed.
   if (
     sysType === OsEventTypeList.DOUBLE_CLICK_EVENT ||
     listType === OsEventTypeList.DOUBLE_CLICK_EVENT ||
     textType === OsEventTypeList.DOUBLE_CLICK_EVENT
   ) {
     if (state.view === 'detail') void renderList()
-    else if (state.view === 'confirm') void renderList()
-    else void renderConfirmExit()
+    else void bridge.shutDownPageContainer(1)
     return
   }
 
@@ -361,17 +349,6 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
   if (sysType === OsEventTypeList.SYSTEM_EXIT_EVENT || sysType === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
     stopAutoRefresh()
     unsubscribe()
-    return
-  }
-
-  if (state.view === 'confirm') {
-    if (listType === OsEventTypeList.CLICK_EVENT) {
-      // Index is omitted on the wire when it is zero, and zero is "No" — so an
-      // absent index must fall back to cancelling, never to exiting.
-      const choice = event.listEvent?.currentSelectItemIndex ?? CONFIRM_INDEX_NO
-      if (choice === CONFIRM_INDEX_YES) void bridge.shutDownPageContainer(0)
-      else void renderList()
-    }
     return
   }
 

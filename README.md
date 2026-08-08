@@ -5,15 +5,15 @@ one chronological list on the glasses: **The Hacker News**, **BleepingComputer**
 **Cybersecurity News** and **The Record**.
 
 Scroll the list on the temple touchpad, tap to read the full article, double-tap to go
-back — and again to bring up the exit confirmation.
+back — and again for the system's exit prompt.
 
 ## Controls
 
-| Gesture | List | Story | Exit confirmation |
-|---|---|---|---|
-| Scroll up/down | move selection | previous/next page | move selection |
-| Tap | open story, or turn the page | next page, then back to list | activate choice |
-| Double-tap | ask before exiting | back to list | cancel |
+| Gesture | List | Story |
+|---|---|---|
+| Scroll up/down | move selection | previous/next page |
+| Tap | open story, or turn the page | next page, then back to list |
+| Double-tap | hand over to the system exit prompt | back to list |
 
 **The list pages.** The firmware renders at most 20 rows, so reaching story 21
 means repainting the list rather than growing it. When the feed does not fit,
@@ -23,15 +23,15 @@ on and wraps at the end. The header tracks position: `CyberNews · 2/5 of 80`.
 **There is no long-press.** `OsEventTypeList` exposes only click, scroll, and
 double-click; the firmware reports no press duration and no down/up pair, so a
 hold cannot be detected or synthesised. Double-tap is the only exit-ish gesture
-available — which is precisely why exiting asks first, since double-tap is easy
-to hit by accident while scrolling.
+available — which is why the host asks before acting on it, since double-tap is
+easy to hit by accident while scrolling.
 
-The confirmation is built from ordinary containers rather than
-`shutDownPageContainer(1)`, whose native prompt gives no control over which
-option starts selected. **"No" is listed first because the list widget opens on
-index 0** — that is the whole mechanism behind it being the default. An event
-whose `currentSelectItemIndex` is missing (protobuf omits zero) therefore also
-resolves to "No", never to exit.
+Exiting hands over to the host with `shutDownPageContainer(1)`, which raises
+the **system** confirmation layer. An app-drawn dialog was tried first — it
+allowed making "No" the default, which the native prompt does not — and was
+**rejected in review**: the platform wants its own prompt here. `exitMode 0`
+exists only for tearing down after the user has already confirmed, so the app
+never calls it.
 
 ```
 ┌────────────────────────────────────────────────┐

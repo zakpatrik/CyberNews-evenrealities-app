@@ -31,16 +31,6 @@ export const HEADER_H = 34
 export const ID_HEADER = 1
 export const ID_LIST = 2
 export const ID_DETAIL = 3
-export const ID_CONFIRM = 4
-
-/**
- * Exit confirmation wording. "No" must stay first: the list widget opens on
- * index 0, and that is the only mechanism for making cancel the default.
- */
-export const CONFIRM_EXIT_QUESTION = 'Exit CyberNews?'
-export const CONFIRM_EXIT_OPTIONS = ['No — keep reading', 'Yes, exit'] as const
-export const CONFIRM_INDEX_NO = 0
-export const CONFIRM_INDEX_YES = 1
 
 /** How many stories to pull from the aggregator. */
 export const FEED_LIMIT = 100

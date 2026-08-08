@@ -13,7 +13,7 @@
 import { calls, fire, lastCall, readStorage, network, uncountedFetch } from './mock-sdk'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { byteLen } from '../src/format'
-import { ID_LIST, ID_DETAIL, ID_CONFIRM, MAX_LIST_ITEMS, FEED_URL } from '../src/config'
+import { ID_LIST, ID_DETAIL, MAX_LIST_ITEMS, FEED_URL } from '../src/config'
 
 // Importing main.ts boots the app: it awaits the bridge, creates the start-up
 // page and performs the first refresh before this module body runs.
@@ -86,13 +86,6 @@ async function loadPublished(): Promise<void> {
   } catch {
     liveArticles = {}
   }
-}
-
-function currentConfirm(): string[] {
-  const last = lastCall('rebuild')
-  if (!last) return []
-  const list = asPage(last.arg).listObject?.find(l => l.containerID === ID_CONFIRM)
-  return list?.itemContainer?.itemName ?? []
 }
 
 function currentDetail(): string | undefined {
@@ -275,55 +268,32 @@ async function main(): Promise<void> {
     'list layout restored after going back',
   )
 
-  console.log('--- exit confirmation ---')
+  console.log('--- exit ---')
   const shutdowns = () => calls.filter(c => c.name === 'shutdown').length
+  const rebuildsBeforeExit = calls.filter(c => c.name === 'rebuild').length
 
-  // Double-tap must never exit directly: it is the only exit gesture available
-  // and is easy to hit by accident while scrolling.
-  let before = shutdowns()
+  // Review rejected an app-drawn confirmation: the platform wants exitMode 1,
+  // which raises the host's own dialog and lets the user decide. exitMode 0 is
+  // only for tearing down after they have already confirmed, so the app must
+  // never call it.
+  const before = shutdowns()
   fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
   await settle()
 
-  const options = currentConfirm()
-  check(options.length === 2, 'double-tap in the list opens a confirmation', `${options.length} options`)
-  check(shutdowns() === before, 'confirmation did not exit on its own')
-  check(/^no\b/i.test(options[0] ?? ''), '"No" is first, so it is the default selection', options[0])
-  check(/yes/i.test(options[1] ?? ''), '"Yes" is second', options[1])
-  console.log(`        options: ${JSON.stringify(options)}`)
-
-  // Cancelling by double-tap.
-  fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
-  await settle()
-  check(currentRows().length > 0, 'double-tap in the confirmation cancels back to the list')
-  check(shutdowns() === before, 'cancelling by double-tap did not exit')
-
-  // A click whose index is omitted on the wire must read as "No", not "Yes".
-  fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
-  await settle()
-  fire({ listEvent: { containerID: ID_CONFIRM, containerName: 'confirm' } })
-  await settle()
-  check(currentRows().length > 0, 'confirmation click with no index cancels')
-  check(shutdowns() === before, 'absent index is treated as "No", never as exit')
-
-  // Explicitly choosing "No".
-  fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
-  await settle()
-  fire({ listEvent: { containerID: ID_CONFIRM, containerName: 'confirm', currentSelectItemIndex: 0 } })
-  await settle()
-  check(shutdowns() === before, 'choosing "No" does not exit')
-  check(currentRows().length > 0, 'choosing "No" returns to the list')
-
-  // Explicitly choosing "Yes".
-  before = shutdowns()
-  fire({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } })
-  await settle()
-  fire({ listEvent: { containerID: ID_CONFIRM, containerName: 'confirm', currentSelectItemIndex: 1 } })
-  await settle()
-  check(shutdowns() === before + 1, 'choosing "Yes" shuts the app down')
+  check(shutdowns() === before + 1, 'double-tap on the list hands over to the host', `${shutdowns() - before}`)
   check(
-    lastCall('shutdown')?.arg === 0,
-    'exits immediately, without the second native prompt',
+    lastCall('shutdown')?.arg === 1,
+    'exitMode is 1, so the system confirmation appears',
     `exitMode=${lastCall('shutdown')?.arg}`,
+  )
+  check(
+    calls.every(c => c.name !== 'shutdown' || c.arg === 1),
+    'exitMode 0 is never used',
+    calls.filter(c => c.name === 'shutdown').map(c => c.arg).join(','),
+  )
+  check(
+    calls.filter(c => c.name === 'rebuild').length === rebuildsBeforeExit,
+    'no app-drawn dialog is painted before handing over',
   )
 
   console.log('--- refresh pacing ---')

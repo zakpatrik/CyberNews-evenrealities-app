@@ -60,11 +60,11 @@ CyberNews · 20 of 60 · 12 new
   TR  Ransomware gang leaks negotiation logs…
 ```
 
-| Gesture | List | Story | Exit confirmation |
-|---|---|---|---|
-| Scroll up/down | move selection | previous/next page | move selection |
-| Tap | open story, or turn the page | next page, then back to list | activate choice |
-| Double-tap | ask before exiting | back to list | cancel |
+| Gesture | List | Story |
+|---|---|---|
+| Scroll up/down | move selection | previous/next page |
+| Tap | open story, or turn the page | next page, then back to list |
+| Double-tap | system exit prompt | back to list |
 
 The list pages. The firmware renders at most 20 rows, so the last one is
 `>> Older` — tap it for the next 19 stories, and again until it wraps back to
@@ -182,19 +182,23 @@ ink coverage 25.2% (the limit is 12-55%), no isolated pixels, nothing inside the
 | Icon | `docs/app-icon-24.png` | 24x24, uploaded in the portal |
 | Screenshots | `docs/screenshots/*.png` | 576x288, straight from the device render |
 
-Screenshots have to match what the app actually renders, so these are simulator
-captures rather than mock-ups.
+Screenshots have to match what the app actually renders, so these are captures
+from the current simulator — **green on black, unaltered**.
 
-**They needed converting.** The simulator's framebuffer is pure green
-(R=0, G=255, B=0) with the artwork carried entirely in the **alpha channel** —
-so a naive greyscale conversion averages the RGB and yields a flat grey
-rectangle, and uploading the file untouched submits a colour image, which the
-guidelines reject. Take alpha as the luminance instead:
+**Do not convert them to greyscale.** An earlier submission was rejected for
+exactly that. The monochrome rule covers the icon and background artwork, not
+screenshots: a screenshot has to be accurate, and the display is green.
+
+The only processing applied is flattening the transparent background onto
+black. The simulator's framebuffer is pure green (R=0, G=255, B=0) with the
+artwork carried entirely in the alpha channel, so the background arrives as a
+transparent hole rather than as the black the wearer sees. Compositing changes
+no visible pixel:
 
 ```python
 im = Image.open(shot).convert('RGBA')
-a = im.split()[3]
-Image.merge('RGB', (a, a, a)).save(out)
+bg = Image.new('RGBA', im.size, (0, 0, 0, 255))
+Image.alpha_composite(bg, im).convert('RGB').save(out)
 ```
 
 ---
