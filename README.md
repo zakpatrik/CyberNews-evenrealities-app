@@ -368,6 +368,7 @@ and fell off the bottom of the canvas.
 | `worker/src/index.ts` | Serves the app and the published feed; no parsing |
 | `.github/workflows/feed.yml` | The hourly cron |
 | `scripts/make-icon.mjs` | Draws the 24x24 icon; asserts Even Hub's rules |
+| `scripts/make-shots.py` | Composites raw captures onto a submission background |
 | `scripts/make-qr.mjs` | Renders the sideload QR as a scannable PNG |
 | `scripts/set-feed-url.mjs` | Writes the Worker URL to both places it must appear |
 
