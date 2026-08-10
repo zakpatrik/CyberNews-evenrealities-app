@@ -10,6 +10,7 @@ import {
   ID_HEADER,
   ID_LIST,
   ID_DETAIL,
+  LIST_ITEM_WIDTH,
 } from './config'
 
 export interface PageContainers {
@@ -52,7 +53,7 @@ export function listPage(headerText: string, rows: string[]): PageContainers {
     isEventCapture: 1,
     itemContainer: new ListItemContainerProperty({
       itemCount: rows.length,
-      itemWidth: SCREEN_W,
+      itemWidth: LIST_ITEM_WIDTH,
       isItemSelectBorderEn: 1,
       itemName: rows,
     }),

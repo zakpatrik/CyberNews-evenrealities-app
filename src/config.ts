@@ -27,6 +27,16 @@ export const SCREEN_W = 576
 export const SCREEN_H = 288
 export const HEADER_H = 34
 
+/**
+ * Width of a list row's selection border.
+ *
+ * Rows drawn the full 576 lose their right edge: the border lands on the last
+ * column, where the widget's own scrollbar sits, and the vertical stroke never
+ * appears — the box renders open on the right. Review caught it. Pulling the
+ * items in leaves the scrollbar its gutter and closes the box.
+ */
+export const LIST_ITEM_WIDTH = 552
+
 /** Container IDs — stable per view so events can be attributed unambiguously. */
 export const ID_HEADER = 1
 export const ID_LIST = 2
