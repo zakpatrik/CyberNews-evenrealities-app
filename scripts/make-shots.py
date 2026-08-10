@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""Composite raw simulator captures onto a submission background.
+"""Prepare simulator captures for submission.
 
-Two screenshot rejections are baked into this script.
+Three rejections are baked into this script, and the lesson of all three is the
+same: leave the capture alone.
 
 The framebuffer is pure green (R=0, G=255, B=0) with the artwork carried
-entirely in the **alpha channel**. So:
+entirely in the **alpha channel** — 95% of a typical frame is fully
+transparent. That is not an artifact to be cleaned up, it is the display: the
+G2 is additive, only the lit pixels emit, and the wearer sees the world behind
+them. So:
 
-  - Converting to greyscale averages the RGB and yields a flat grey rectangle.
-    The monochrome rule covers the icon and background artwork, not screenshots
-    — a screenshot has to be accurate, and the display is green.
-  - Flattening onto black looks right but was rejected too. Black is a
-    simulator artifact: the G2 is additive and transparent, only the green
-    pixels emit, and the wearer sees the world behind them.
+  - Greyscale averages the RGB into a flat grey rectangle. The monochrome rule
+    covers the icon and background artwork, not screenshots.
+  - Flattening onto black submits a slab nobody ever sees.
+  - Flattening onto grey is the same mistake in a lighter colour.
 
-So the raw captures are kept untouched in raw/, and the submission set is
-generated from them. Changing the house style is one flag, not a re-shoot.
+Hence the default is `none`: copy the capture through byte-for-byte, having
+checked it really does carry transparency. The painted grounds remain for
+places that need an opaque image — a README, a slide — never for submission.
 
-    python3 scripts/make-shots.py [--bg slate|dusk|scene] [--out docs/screenshots]
+    python3 scripts/make-shots.py [--bg none|slate|dusk|scene]
 
 Python rather than Node because this needs to *decode* PNGs, and Pillow beats
 hand-rolling an inflate/unfilter pass for a build-time script.
@@ -72,7 +75,8 @@ def build_background(kind):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bg", default="slate", choices=sorted(BACKGROUNDS))
+    ap.add_argument("--bg", default="none", choices=["none", *sorted(BACKGROUNDS)],
+                    help="none keeps the transparent background, which is what submission wants")
     ap.add_argument("--raw", default="docs/screenshots/raw")
     ap.add_argument("--out", default="docs/screenshots")
     args = ap.parse_args()
@@ -86,28 +90,40 @@ def main():
                  f"/api/screenshot/glasses first.")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    background = build_background(args.bg)
+    background = build_background(args.bg) if args.bg != "none" else None
 
     for shot in shots:
         src = Image.open(shot).convert("RGBA")
         if src.size != (W, H):
             sys.exit(f"{shot.name} is {src.size}, expected {(W, H)} — not a glasses capture.")
 
-        flat = Image.alpha_composite(background, src).convert("RGB")
+        alpha = src.getchannel("A")
+        lit = sum(1 for a in alpha.getdata() if a > 0)
         dest = out_dir / shot.name
-        flat.save(dest)
 
-        # Count from the source alpha, not the composite. The backgrounds carry
-        # their own green bias, so "greenest channel" would match every pixel.
-        lit = sum(1 for a in src.getchannel("A").getdata() if a > 0)
+        if background is None:
+            # A capture with no transparency is a sign it has already been
+            # flattened somewhere upstream — exactly the thing that got rejected.
+            if alpha.getextrema()[0] != 0:
+                sys.exit(f"{shot.name} has no transparent pixels. Re-capture it from "
+                         f"the simulator; do not pre-flatten.")
+            dest.write_bytes(shot.read_bytes())
+        else:
+            Image.alpha_composite(background, src).convert("RGB").save(dest)
+
         try:
             shown = dest.relative_to(ROOT)
         except ValueError:
             shown = dest
-        print(f"  {shown}  {args.bg}  {lit} UI pixels "
-              f"({lit / (W * H) * 100:.1f}% of the canvas)")
+        ground = "transparent" if background is None else args.bg
+        print(f"  {shown}  {ground}  {lit} UI pixels "
+              f"({lit / (W * H) * 100:.1f}% lit, {(W * H - lit) / (W * H) * 100:.1f}% see-through)")
 
-    print(f"\n{len(shots)} screenshots on '{args.bg}'. Raw captures untouched in {args.raw}.")
+    if background is None:
+        print(f"\n{len(shots)} screenshots, transparent, copied unaltered from {args.raw}.")
+    else:
+        print(f"\n{len(shots)} screenshots on '{args.bg}'. NOT for submission — "
+              f"an opaque ground was rejected twice.")
 
 
 if __name__ == "__main__":

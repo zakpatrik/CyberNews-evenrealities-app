@@ -182,24 +182,27 @@ ink coverage 25.2% (the limit is 12-55%), no isolated pixels, nothing inside the
 | Icon | `docs/app-icon-24.png` | 24x24, uploaded in the portal |
 | Screenshots | `docs/screenshots/*.png` | 576x288, straight from the device render |
 
-Screenshots have to match what the app actually renders, so these are captures
-from the current simulator — **green on black, unaltered**.
+Screenshots come from the current simulator and go out **exactly as captured**.
+Three rejections say the same thing: leave them alone.
 
-**Do not convert them to greyscale.** An earlier submission was rejected for
-exactly that. The monochrome rule covers the icon and background artwork, not
-screenshots: a screenshot has to be accurate, and the display is green.
+1. **Not greyscale.** The monochrome rule covers the icon and background
+   artwork, not screenshots.
+2. **Not black-backed.** Black is a simulator artifact, not the display.
+3. **Not grey-backed either.** The same mistake in a lighter colour.
 
-The only processing applied is flattening the transparent background onto
-black. The simulator's framebuffer is pure green (R=0, G=255, B=0) with the
-artwork carried entirely in the alpha channel, so the background arrives as a
-transparent hole rather than as the black the wearer sees. Compositing changes
-no visible pixel:
+The G2 is **additive and transparent**: only the lit pixels emit, and the
+wearer sees the world behind them. A capture is ~95% fully transparent with
+green where the display glows — and that transparency *is* the screenshot. Any
+opaque ground invents something nobody sees.
 
-```python
-im = Image.open(shot).convert('RGBA')
-bg = Image.new('RGBA', im.size, (0, 0, 0, 255))
-Image.alpha_composite(bg, im).convert('RGB').save(out)
+```bash
+npm run shots          # copies raw/ through, having checked the alpha survives
 ```
+
+It refuses a capture with no transparent pixels, since that means someone
+already flattened it. The painted grounds (`--bg slate|dusk|scene`) stay
+available for a README or a slide that needs an opaque image — never for
+submission.
 
 ---
 
